@@ -61,7 +61,7 @@ pub async fn execute() -> Result<()> {
     println!(
         "  {} Install with: {}",
         "→".cyan(),
-        "apm install <agent-name>".cyan().bold()
+        "ax install <agent-name>".cyan().bold()
     );
 
     Ok(())

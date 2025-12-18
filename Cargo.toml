@@ -1,9 +1,9 @@
 [package]
-name = "apm"
+name = "ax"
 version = "1.0.0"
 edition = "2021"
 authors = ["ahmed6ww"]
-description = "Agent Package Manager - The npm of the Agentic AI era"
+description = "AX - The Agent Package Manager"
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/ahmed6ww/ax"
@@ -11,11 +11,11 @@ keywords = ["ai", "agents", "cli", "claude", "cursor"]
 categories = ["command-line-utilities", "development-tools"]
 
 [[bin]]
-name = "apm"
+name = "ax"
 path = "src/main.rs"
 
 [lib]
-name = "apm_lib"
+name = "ax_lib"
 path = "src/lib.rs"
 
 [dependencies]

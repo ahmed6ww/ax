@@ -1,4 +1,4 @@
-# APM (Agent Package Manager)
+# AX (Agent Package Manager)
 
 > **The npm of the Agentic AI era.**
 >
@@ -8,15 +8,15 @@
 ![Rust](https://img.shields.io/badge/rust-stable-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-## 🚀 What is APM?
+## 🚀 What is AX?
 
-APM is a Rust-based CLI tool that solves **Configuration Fatigue** in AI-assisted development. Instead of manually configuring System Prompts, MCP Servers, and Documentation files for every new project, developers simply run:
+AX is a Rust-based CLI tool that solves **Configuration Fatigue** in AI-assisted development. Instead of manually configuring System Prompts, MCP Servers, and Documentation files for every new project, developers simply run:
 
 ```bash
-apm install rust-architect
+ax install rust-architect
 ```
 
-APM acts as a **Transpiler**: It reads a universal `agent.yaml` definition and compiles it into the native format of your environment—whether that's Claude Code or Cursor.
+AX acts as a **Transpiler**: It reads a universal `agent.yaml` definition and compiles it into the native format of your environment—whether that's Claude Code or Cursor.
 
 ## ✨ Features
 
@@ -39,25 +39,25 @@ curl -fsSL https://raw.githubusercontent.com/ahmed6ww/ax/main/install.sh | sh
 
 ```bash
 git clone https://github.com/ahmed6ww/ax
-cd apm
+cd ax
 cargo build --release
-sudo cp target/release/apm /usr/local/bin/
+sudo cp target/release/ax /usr/local/bin/
 ```
 
 ## 🎮 Quick Start
 
-### 1. Initialize APM
+### 1. Initialize AX
 
 ```bash
-apm init
+ax init
 ```
 
-This detects your installed editors and creates `~/.apm/config.toml`.
+This detects your installed editors and creates `~/.ax/config.toml`.
 
 ### 2. Browse Available Agents
 
 ```bash
-apm list
+ax list
 ```
 
 Output:
@@ -71,20 +71,20 @@ Output:
   qa-testing-squad     1.0.0      Playwright + Jest testing...            ahmed6ww
 
   → 3 agent(s) available
-  → Install with: apm install <agent-name>
+  → Install with: ax install <agent-name>
 ```
 
 ### 3. Install an Agent
 
 ```bash
 # Install to Claude Code (default)
-apm install rust-architect
+ax install rust-architect
 
 # Install to Cursor
-apm install rust-architect --target cursor
+ax install rust-architect --target cursor
 
 # Install globally
-apm install rust-architect --global
+ax install rust-architect --global
 ```
 
 ## 📐 The Universal Schema
@@ -128,7 +128,7 @@ mcp:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                          APM                            │
+│                          AX                             │
 ├─────────────────────────────────────────────────────────┤
 │  ┌─────────┐    ┌─────────────┐    ┌─────────────────┐ │
 │  │  init   │    │    list     │    │     install     │ │
@@ -184,8 +184,8 @@ mcp:
 - [ ] VS Code extension
 - [ ] Agent versioning & updates
 - [ ] Private registries
-- [ ] `apm create` template generator
-- [ ] `apm publish` for community agents
+- [ ] `ax create` template generator
+- [ ] `ax publish` for community agents
 
 ## 📄 License
 

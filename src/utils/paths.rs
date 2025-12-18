@@ -5,15 +5,15 @@
 use anyhow::Result;
 use std::path::PathBuf;
 
-/// Get the APM configuration directory (~/.apm)
-pub fn apm_config_dir() -> Result<PathBuf> {
+/// Get the AX configuration directory (~/.ax)
+pub fn ax_config_dir() -> Result<PathBuf> {
     let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
-    Ok(home.join(".apm"))
+    Ok(home.join(".ax"))
 }
 
-/// Get the APM configuration file path (~/.apm/config.toml)
-pub fn apm_config_path() -> Result<PathBuf> {
-    Ok(apm_config_dir()?.join("config.toml"))
+/// Get the AX configuration file path (~/.ax/config.toml)
+pub fn ax_config_path() -> Result<PathBuf> {
+    Ok(ax_config_dir()?.join("config.toml"))
 }
 
 /// Get the Claude configuration directory

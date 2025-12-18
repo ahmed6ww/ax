@@ -51,7 +51,7 @@ impl ApmConfig {
 
     /// Load configuration or create default
     pub fn load_or_default() -> Result<Self> {
-        let path = crate::utils::paths::apm_config_path()?;
+        let path = crate::utils::paths::ax_config_path()?;
         if path.exists() {
             Self::load(&path)
         } else {

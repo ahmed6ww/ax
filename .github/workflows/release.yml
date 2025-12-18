@@ -18,20 +18,20 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact: apm-linux-x64
+            artifact: ax-linux-x64
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            artifact: apm-linux-arm64
+            artifact: ax-linux-arm64
             cross: true
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact: apm-macos-x64
+            artifact: ax-macos-x64
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact: apm-macos-arm64
+            artifact: ax-macos-arm64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact: apm-windows-x64.exe
+            artifact: ax-windows-x64.exe
 
     steps:
       - name: Checkout
@@ -57,12 +57,12 @@ jobs:
       - name: Prepare artifact (Unix)
         if: runner.os != 'Windows'
         run: |
-          cp target/${{ matrix.target }}/release/apm ${{ matrix.artifact }}
+          cp target/${{ matrix.target }}/release/ax ${{ matrix.artifact }}
           chmod +x ${{ matrix.artifact }}
 
       - name: Prepare artifact (Windows)
         if: runner.os == 'Windows'
-        run: cp target/${{ matrix.target }}/release/apm.exe ${{ matrix.artifact }}
+        run: cp target/${{ matrix.target }}/release/ax.exe ${{ matrix.artifact }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -90,11 +90,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/apm-linux-x64/apm-linux-x64
-            artifacts/apm-linux-arm64/apm-linux-arm64
-            artifacts/apm-macos-x64/apm-macos-x64
-            artifacts/apm-macos-arm64/apm-macos-arm64
-            artifacts/apm-windows-x64.exe/apm-windows-x64.exe
+            artifacts/ax-linux-x64/ax-linux-x64
+            artifacts/ax-linux-arm64/ax-linux-arm64
+            artifacts/ax-macos-x64/ax-macos-x64
+            artifacts/ax-macos-arm64/ax-macos-arm64
+            artifacts/ax-windows-x64.exe/ax-windows-x64.exe
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

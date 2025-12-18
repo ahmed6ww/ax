@@ -6,12 +6,12 @@ use clap::{Parser, Subcommand, ValueEnum};
 
 use crate::installers::Target;
 
-/// APM (Agent Package Manager) - The npm of the Agentic AI era
+/// AX (Agent Package Manager) - The npm of the Agentic AI era
 ///
 /// Install AI agent configurations into Claude Code, Cursor, and more.
 #[derive(Parser, Debug)]
-#[command(name = "apm")]
-#[command(author = "Agenza Labs")]
+#[command(name = "ax")]
+#[command(author = "ahmed6ww")]
 #[command(version = "1.0.0")]
 #[command(about = "Write Once, Run on Claude, Cursor, or Codex", long_about = None)]
 #[command(propagate_version = true)]
@@ -22,7 +22,7 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Initialize APM and detect installed editors
+    /// Initialize AX and detect installed editors
     Init,
 
     /// List available agents from the registry

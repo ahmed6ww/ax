@@ -1,4 +1,4 @@
-//! APM (Agent Package Manager) - The npm of the Agentic AI era
+//! AX (Agent Package Manager) - The npm of the Agentic AI era
 //!
 //! A CLI tool that installs AI Agent configurations into Claude Code and Cursor.
 

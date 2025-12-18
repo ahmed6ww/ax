@@ -12,7 +12,7 @@ use crate::utils::ui;
 
 /// Execute the init command
 pub async fn execute() -> Result<()> {
-    ui::print_header("APM Initialization");
+    ui::print_header("AX Initialization");
 
     // Detect installed editors
     println!("{} Detecting installed editors...\n", "→".cyan());
@@ -39,7 +39,7 @@ pub async fn execute() -> Result<()> {
 
     // Create config
     let config = ApmConfig::new(default_target.to_string());
-    let config_path = paths::apm_config_path()?;
+    let config_path = paths::ax_config_path()?;
 
     // Ensure config directory exists
     if let Some(parent) = config_path.parent() {
@@ -61,10 +61,10 @@ pub async fn execute() -> Result<()> {
     );
 
     println!();
-    ui::print_success("APM initialized successfully!");
+    ui::print_success("AX initialized successfully!");
     println!(
         "\n  Run {} to see available agents.",
-        "apm list".cyan().bold()
+        "ax list".cyan().bold()
     );
 
     Ok(())
