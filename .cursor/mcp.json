@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "npm": {
+      "args": [],
+      "command": "npm",
+      "env": {}
+    }
+  }
+}

@@ -1,0 +1,37 @@
+---
+description: Knowledge base for fullstack-next agent
+globs: 
+alwaysApply: true
+---
+
+# fullstack-next - nextjs-patterns
+
+# Next.js 15 Patterns
+
+## Server Components (Default)
+```tsx
+// app/users/page.tsx
+async function UsersPage() {
+  const users = await fetchUsers();
+  return <UserList users={users} />;
+}
+```
+
+## Client Components
+```tsx
+'use client';
+import { useState } from 'react';
+
+export function Counter() {
+  const [count, setCount] = useState(0);
+  return <button onClick={() => setCount(c => c + 1)}>{count}</button>;
+}
+```
+
+## Server Actions
+```tsx
+'use server';
+export async function createUser(formData: FormData) {
+  // Runs on the server
+}
+```

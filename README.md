@@ -32,13 +32,13 @@ APM acts as a **Transpiler**: It reads a universal `agent.yaml` definition and c
 ### Pre-built Binary
 
 ```bash
-curl -fsSL https://apm.agenza.dev/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/ahmed6ww/apm/main/install.sh | sh
 ```
 
 ### From Source
 
 ```bash
-git clone https://github.com/agenza-labs/apm
+git clone https://github.com/ahmed6ww/apm
 cd apm
 cargo build --release
 sudo cp target/release/apm /usr/local/bin/
@@ -66,9 +66,9 @@ Output:
 
   NAME                 VERSION    DESCRIPTION                              AUTHOR
   ─────────────────────────────────────────────────────────────────────────────────
-  rust-architect       1.0.0      Senior Rust Systems Engineer...         agenza-labs
-  fullstack-next       1.0.0      Next.js 15 + FastAPI + ShadcnUI...      agenza-labs
-  qa-testing-squad     1.0.0      Playwright + Jest testing...            agenza-labs
+  rust-architect       1.0.0      Senior Rust Systems Engineer...         ahmed6ww
+  fullstack-next       1.0.0      Next.js 15 + FastAPI + ShadcnUI...      ahmed6ww
+  qa-testing-squad     1.0.0      Playwright + Jest testing...            ahmed6ww
 
   → 3 agent(s) available
   → Install with: apm install <agent-name>
@@ -96,7 +96,7 @@ All agents follow the `agent.yaml` schema:
 name: "rust-architect"
 version: "1.0.0"
 description: "Senior Rust Systems Engineer"
-author: "agenza-labs"
+author: "ahmed6ww"
 
 # 1. Identity (The Brain) - Becomes the System Prompt
 identity:
@@ -189,7 +189,7 @@ mcp:
 
 ## 📄 License
 
-MIT © [Agenza Labs](https://agenza.dev)
+MIT © [Ahmed](https://github.com/ahmed6ww)
 
 ---
 
