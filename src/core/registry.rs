@@ -93,19 +93,19 @@ impl Registry {
                 name: "rust-architect".to_string(),
                 version: "1.0.0".to_string(),
                 description: "Senior Rust Systems Engineer optimized for Tokio & zero-cost abstractions".to_string(),
-                author: "agenza-labs".to_string(),
+                author: "ahmed6ww".to_string(),
             },
             AgentInfo {
                 name: "fullstack-next".to_string(),
                 version: "1.0.0".to_string(),
                 description: "Next.js 15 + FastAPI + ShadcnUI full-stack expert".to_string(),
-                author: "agenza-labs".to_string(),
+                author: "ahmed6ww".to_string(),
             },
             AgentInfo {
                 name: "qa-testing-squad".to_string(),
                 version: "1.0.0".to_string(),
                 description: "Playwright + Jest testing configuration specialist".to_string(),
-                author: "agenza-labs".to_string(),
+                author: "ahmed6ww".to_string(),
             },
         ]
     }
@@ -128,7 +128,7 @@ impl Registry {
             name: "rust-architect".to_string(),
             version: "1.0.0".to_string(),
             description: "Senior Rust Systems Engineer optimized for Tokio & zero-cost abstractions".to_string(),
-            author: "agenza-labs".to_string(),
+            author: "ahmed6ww".to_string(),
             identity: Identity {
                 model: Some("claude-3-5-sonnet-latest".to_string()),
                 icon: Some("🦀".to_string()),
@@ -231,7 +231,7 @@ pub enum MyError {
             name: "fullstack-next".to_string(),
             version: "1.0.0".to_string(),
             description: "Next.js 15 + FastAPI + ShadcnUI full-stack expert".to_string(),
-            author: "agenza-labs".to_string(),
+            author: "ahmed6ww".to_string(),
             identity: Identity {
                 model: Some("claude-3-5-sonnet-latest".to_string()),
                 icon: Some("⚡".to_string()),
@@ -314,7 +314,7 @@ export async function createUser(formData: FormData) {
             name: "qa-testing-squad".to_string(),
             version: "1.0.0".to_string(),
             description: "Playwright + Jest testing configuration specialist".to_string(),
-            author: "agenza-labs".to_string(),
+            author: "ahmed6ww".to_string(),
             identity: Identity {
                 model: Some("claude-3-5-sonnet-latest".to_string()),
                 icon: Some("🧪".to_string()),

@@ -1,7 +1,7 @@
 name: "rust-architect"
 version: "1.0.0"
 description: "Senior Rust Systems Engineer optimized for Tokio & zero-cost abstractions"
-author: "agenza-labs"
+author: "ahmed6ww"
 
 identity:
   model: "claude-3-5-sonnet-latest"
