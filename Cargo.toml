@@ -1,0 +1,60 @@
+[package]
+name = "apm"
+version = "1.0.0"
+edition = "2021"
+authors = ["Agenza Labs"]
+description = "Agent Package Manager - The npm of the Agentic AI era"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/agenza-labs/apm"
+keywords = ["ai", "agents", "cli", "claude", "cursor"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "apm"
+path = "src/main.rs"
+
+[lib]
+name = "apm_lib"
+path = "src/lib.rs"
+
+[dependencies]
+# CLI Framework
+clap = { version = "4.4", features = ["derive", "color", "suggestions"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1.0"
+toml = "0.8"
+
+# HTTP Client
+reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+
+# Async Runtime
+tokio = { version = "1.0", features = ["full"] }
+
+# Path Utilities
+dirs = "5.0"
+
+# Terminal UI
+indicatif = "0.17"
+colored = "2.0"
+console = "0.15"
+
+# Error Handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Utilities
+which = "6.0"
+
+[dev-dependencies]
+tempfile = "3.10"
+assert_cmd = "2.0"
+predicates = "3.1"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
