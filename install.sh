@@ -1,6 +1,6 @@
 #!/bin/bash
 # APM Installer - One-line installation script
-# Usage: curl -fsSL https://raw.githubusercontent.com/ahmed6ww/apm/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/ahmed6ww/ax/main/install.sh | bash
 
 set -e
 
@@ -45,7 +45,7 @@ echo "→ Detected platform: $OS-$ARCH"
 
 # Get latest version
 echo "→ Fetching latest version..."
-VERSION=$(curl -sS https://api.github.com/repos/ahmed6ww/apm/releases/latest 2>/dev/null | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/' || echo "v1.0.0")
+VERSION=$(curl -sS https://api.github.com/repos/ahmed6ww/ax/releases/latest 2>/dev/null | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/' || echo "v1.0.0")
 
 if [ -z "$VERSION" ]; then
   VERSION="v1.0.0"
@@ -54,7 +54,7 @@ fi
 echo "→ Installing APM $VERSION..."
 
 # Download binary
-URL="https://github.com/ahmed6ww/apm/releases/download/$VERSION/$BINARY"
+URL="https://github.com/ahmed6ww/ax/releases/download/$VERSION/$BINARY"
 TEMP_FILE=$(mktemp)
 
 if ! curl -fsSL "$URL" -o "$TEMP_FILE" 2>/dev/null; then
@@ -94,4 +94,4 @@ echo "  apm init                          # Initialize APM"
 echo "  apm list                          # Browse available agents"
 echo "  apm install rust-architect        # Install an agent"
 echo ""
-echo -e "${CYAN}Learn more: https://github.com/ahmed6ww/apm${NC}"
+echo -e "${CYAN}Learn more: https://github.com/ahmed6ww/ax${NC}"

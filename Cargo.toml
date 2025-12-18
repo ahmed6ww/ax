@@ -6,7 +6,7 @@ authors = ["ahmed6ww"]
 description = "Agent Package Manager - The npm of the Agentic AI era"
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/ahmed6ww/apm"
+repository = "https://github.com/ahmed6ww/ax"
 keywords = ["ai", "agents", "cli", "claude", "cursor"]
 categories = ["command-line-utilities", "development-tools"]
 

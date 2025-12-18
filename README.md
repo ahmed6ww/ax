@@ -32,13 +32,13 @@ APM acts as a **Transpiler**: It reads a universal `agent.yaml` definition and c
 ### Pre-built Binary
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ahmed6ww/apm/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/ahmed6ww/ax/main/install.sh | sh
 ```
 
 ### From Source
 
 ```bash
-git clone https://github.com/ahmed6ww/apm
+git clone https://github.com/ahmed6ww/ax
 cd apm
 cargo build --release
 sudo cp target/release/apm /usr/local/bin/

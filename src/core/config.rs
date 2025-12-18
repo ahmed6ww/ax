@@ -22,7 +22,7 @@ pub struct ApmConfig {
 }
 
 fn default_registry_url() -> String {
-    "https://raw.githubusercontent.com/ahmed6ww/apm-agents/main".to_string()
+    "https://raw.githubusercontent.com/ahmed6ww/ax-agents/main".to_string()
 }
 
 impl ApmConfig {
