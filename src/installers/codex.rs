@@ -2,14 +2,13 @@
 //!
 //! Installs agent configurations into Codex's native format.
 //!
-//! Output structure:
-//! - ~/.codex/agents/{name}.md - Agent as Markdown with YAML frontmatter
-//! - ~/.codex/skills/{name}/{skill}.md - Skills as Markdown files
-//! - ~/.codex/config.json - MCP tool configuration (assumed)
+//! Output structure (per official docs):
+//! - ~/.codex/skills/<skill-name>/SKILL.md - Skills as Markdown with YAML frontmatter
+//!
+//! Note: Codex only uses Skills. Agents and MCPs are not supported.
+//! See: https://developers.openai.com/codex/skills
 
 use anyhow::{Context, Result};
-use serde_json::{json, Value};
-use colored::Colorize;
 use std::fs;
 use std::path::PathBuf;
 
@@ -20,6 +19,7 @@ use crate::utils::paths;
 /// Installer for Codex
 pub struct CodexInstaller {
     /// Whether to install globally
+    #[allow(dead_code)]
     global: bool,
 }
 
@@ -28,56 +28,55 @@ impl CodexInstaller {
         Self { global }
     }
 
-    /// Get the base directory for Codex configuration
+    /// Get the base directory for Codex configuration (~/.codex)
     fn get_base_dir(&self) -> Result<PathBuf> {
         paths::codex_config_dir()
             .context("Could not find Codex configuration directory")
     }
 
-    /// Get the agents directory
-    fn get_agents_dir(&self) -> Result<PathBuf> {
-        Ok(self.get_base_dir()?.join("agents"))
+    /// Get the skills directory (~/.codex/skills)
+    fn get_skills_dir(&self) -> Result<PathBuf> {
+        Ok(self.get_base_dir()?.join("skills"))
     }
 
-    /// Get the Codex config path (assumed)
-    fn get_config_path(&self) -> Result<PathBuf> {
-        Ok(self.get_base_dir()?.join("config.json"))
-    }
+    /// Generate SKILL.md content per official Codex format
+    /// Format:
+    /// ---
+    /// name: skill-name
+    /// description: Description that helps Codex select the skill
+    /// metadata:
+    ///   short-description: Optional user-facing description
+    /// ---
+    /// Skill instructions...
+    fn generate_skill_md(skill_name: &str, content: &str, agent_description: &str) -> String {
+        // Extract a short description from the first line or use agent description
+        let short_desc = content.lines()
+            .find(|line| !line.trim().is_empty() && !line.starts_with('#'))
+            .map(|s| s.trim().chars().take(100).collect::<String>())
+            .unwrap_or_else(|| agent_description.chars().take(100).collect());
 
-    /// Generate the markdown content with YAML frontmatter
-    fn generate_agent_markdown(agent: &AgentConfig) -> String {
-        let icon = agent.identity.icon.as_deref().unwrap_or("🤖");
-        let model = agent.identity.model.as_deref().unwrap_or("gpt-4o");
-        
         format!(
             r#"---
 name: {}
 description: {}
-model: {}
-icon: {}
+metadata:
+  short-description: {}
 ---
 
 {}"#,
-            agent.name,
-            agent.description,
-            model,
-            icon,
-            agent.identity.system_prompt
+            skill_name,
+            agent_description.chars().take(500).collect::<String>(),
+            short_desc,
+            content
         )
     }
 }
 
 impl Installer for CodexInstaller {
-    fn install_identity(&self, agent: &AgentConfig) -> Result<()> {
-        let agents_dir = self.get_agents_dir()?;
-        fs::create_dir_all(&agents_dir)?;
-
-        // Create the agent markdown file
-        let agent_file = agents_dir.join(format!("{}.md", agent.name));
-        let markdown_content = Self::generate_agent_markdown(agent);
-        
-        fs::write(&agent_file, markdown_content)?;
-
+    fn install_identity(&self, _agent: &AgentConfig) -> Result<()> {
+        // Codex doesn't use agents in the same way as Claude Code.
+        // The "identity" concept is handled through skills in Codex.
+        // We skip this step for Codex.
         Ok(())
     }
 
@@ -86,76 +85,42 @@ impl Installer for CodexInstaller {
             return Ok(());
         }
 
-        let base_dir = self.get_base_dir()?;
-        let skills_dir = base_dir.join("skills").join(&agent.name);
-        fs::create_dir_all(&skills_dir)?;
+        let skills_dir = self.get_skills_dir()?;
 
+        // Each skill goes in its own directory with a SKILL.md file
+        // Format: ~/.codex/skills/<skill-name>/SKILL.md
         for skill in &agent.skills {
-            let skill_file = skills_dir.join(format!("{}.md", skill.name));
-            fs::write(&skill_file, &skill.content)?;
+            let skill_folder = skills_dir.join(&skill.name);
+            fs::create_dir_all(&skill_folder)?;
+
+            let skill_file = skill_folder.join("SKILL.md");
+            let skill_content = Self::generate_skill_md(
+                &skill.name,
+                &skill.content,
+                &agent.description
+            );
+            
+            fs::write(&skill_file, skill_content)?;
         }
 
         Ok(())
     }
 
-    fn install_tools(&self, agent: &AgentConfig) -> Result<()> {
-        if agent.mcp.is_empty() {
-            return Ok(());
-        }
-
-        let config_path = self.get_config_path()?;
-
-        // Load existing config or create new one
-        let mut config: Value = if config_path.exists() {
-            let content = fs::read_to_string(&config_path)?;
-            serde_json::from_str(&content).unwrap_or_else(|_| json!({}))
-        } else {
-            json!({})
-        };
-
-        // Ensure mcpServers object exists
-        if config.get("mcpServers").is_none() {
-            config["mcpServers"] = json!({});
-        }
-
-        // Add each MCP tool
-        for tool in &agent.mcp {
-            let tool_config = json!({
-                "command": tool.command,
-                "args": tool.args,
-                "env": tool.env
-            });
-            config["mcpServers"][&tool.name] = tool_config;
-
-            // Check for setup URL (API key requirement)
-            if let Some(url) = &tool.setup_url {
-                println!("\n  {} Setup required for MCP tool '{}'", "ℹ".blue().bold(), tool.name.bold());
-                println!("  {} Get your API key here: {}", "→".cyan(), url.underline().blue());
-            }
-        }
-
-        // Ensure parent directory exists
-        if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        // Write the updated config
-        fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
-
+    fn install_tools(&self, _agent: &AgentConfig) -> Result<()> {
+        // Codex doesn't support MCP tools in the same way.
+        // MCPs are not part of the Codex skill system.
         Ok(())
     }
 
     fn uninstall(&self, agent_name: &str) -> Result<()> {
-        // Remove agent file
-        let agent_file = self.get_agents_dir()?.join(format!("{}.md", agent_name));
-        if agent_file.exists() {
-            fs::remove_file(&agent_file)?;
-        }
-
-        // Remove skills directory
-        let skills_dir = self.get_base_dir()?.join("skills").join(agent_name);
-        if skills_dir.exists() {
-            fs::remove_dir_all(&skills_dir)?;
+        // For Codex, we installed skills named after the skill, not the agent.
+        // We need to track which skills belong to which agent, or just remove by skill name.
+        // For now, try to remove a skill folder with the agent name (fallback)
+        let skills_dir = self.get_skills_dir()?;
+        let skill_folder = skills_dir.join(agent_name);
+        
+        if skill_folder.exists() {
+            fs::remove_dir_all(&skill_folder)?;
         }
 
         Ok(())
