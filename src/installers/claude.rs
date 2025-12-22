@@ -38,11 +38,37 @@ impl ClaudeInstaller {
         Ok(self.get_base_dir()?.join("agents"))
     }
 
-    /// Get the Claude Code config path (~/.claude.json for MCP servers)
+    /// Get the Claude Code config path for MCP servers
+    /// On Linux: ~/.config/claude/config.json
+    /// On macOS: ~/Library/Application Support/Claude/config.json
     fn get_mcp_config_path(&self) -> Result<PathBuf> {
-        let home = dirs::home_dir()
-            .context("Could not find home directory")?;
-        Ok(home.join(".claude.json"))
+        #[cfg(target_os = "linux")]
+        {
+            let config_dir = dirs::config_dir()
+                .context("Could not find config directory")?;
+            Ok(config_dir.join("claude").join("config.json"))
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            let home = dirs::home_dir()
+                .context("Could not find home directory")?;
+            Ok(home.join("Library/Application Support/Claude/config.json"))
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            let config_dir = dirs::config_dir()
+                .context("Could not find config directory")?;
+            Ok(config_dir.join("Claude").join("config.json"))
+        }
+
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        {
+            let home = dirs::home_dir()
+                .context("Could not find home directory")?;
+            Ok(home.join(".claude.json"))
+        }
     }
 
     /// Generate the markdown content with YAML frontmatter

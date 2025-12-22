@@ -45,10 +45,10 @@ echo "→ Detected platform: $OS-$ARCH"
 
 # Get latest version
 echo "→ Fetching latest version..."
-VERSION=$(curl -sS https://api.github.com/repos/ahmed6ww/ax/releases/latest 2>/dev/null | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/' || echo "v1.2.2")
+VERSION=$(curl -sS https://api.github.com/repos/ahmed6ww/ax/releases/latest 2>/dev/null | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/' || echo "v1.2.3")
 
 if [ -z "$VERSION" ]; then
-  VERSION="v1.2.2"
+  VERSION="v1.2.3"
 fi
 
 echo "→ Installing AX $VERSION..."
