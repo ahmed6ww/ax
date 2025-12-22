@@ -184,6 +184,11 @@ impl Installer for ClaudeInstaller {
             }
         }
 
+        // Ensure parent directory exists
+        if let Some(parent) = config_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
         // Write the updated config
         fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
 

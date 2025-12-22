@@ -12,7 +12,7 @@ use crate::installers::Target;
 #[derive(Parser, Debug)]
 #[command(name = "ax")]
 #[command(author = "ahmed6ww")]
-#[command(version = "1.2.3")]
+#[command(version = "1.2.4")]
 #[command(about = "Write Once, Run on Claude, Cursor, or Codex", long_about = None)]
 #[command(propagate_version = true)]
 pub struct Cli {
