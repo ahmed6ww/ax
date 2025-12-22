@@ -77,22 +77,48 @@ pub async fn execute(agent_name: &str, target: TargetArg, global: bool) -> Resul
 
     // Step 6: Install MCP tools
     if !agent.mcp.is_empty() {
-        let spinner = ui::create_spinner(&format!("Configuring {} MCP tool(s)...", agent.mcp.len()));
-        installer.install_tools(&agent)?;
+        // Clone and mutate agent to add actual API keys
+        let mut agent_with_keys = agent.clone();
+        
+        // Check for MCPs that require API keys and prompt user
+        for tool in &mut agent_with_keys.mcp {
+            if let Some(url) = &tool.setup_url {
+                println!();
+                println!("  {} MCP '{}' requires an API key", "ℹ".blue().bold(), tool.name.bold());
+                println!("  {} Get your API key here: {}", "→".cyan(), url.underline().blue());
+                println!();
+                print!("  {} Paste your API key (or press Enter to skip): ", "?".yellow().bold());
+                
+                // Flush stdout to ensure prompt is shown
+                use std::io::Write;
+                std::io::stdout().flush().ok();
+                
+                // Read API key from user
+                let mut api_key = String::new();
+                if std::io::stdin().read_line(&mut api_key).is_ok() {
+                    let api_key = api_key.trim();
+                    if !api_key.is_empty() {
+                        // Replace placeholder with actual key in env
+                        for (_, value) in tool.env.iter_mut() {
+                            if value.starts_with("${") && value.ends_with("}") {
+                                *value = api_key.to_string();
+                            }
+                        }
+                        println!("  {} API key configured!", "✓".green());
+                    } else {
+                        println!("  {} Skipped - you can configure this later", "→".cyan());
+                    }
+                }
+            }
+        }
+
+        let spinner = ui::create_spinner(&format!("Configuring {} MCP tool(s)...", agent_with_keys.mcp.len()));
+        installer.install_tools(&agent_with_keys)?;
         spinner.finish_with_message(format!(
             "{} {} MCP tool(s) configured",
             "✓".green(),
-            agent.mcp.len()
+            agent_with_keys.mcp.len()
         ));
-
-        // Print setup URLs for MCPs that require API keys
-        for tool in &agent.mcp {
-            if let Some(url) = &tool.setup_url {
-                println!();
-                println!("  {} Setup required for MCP tool '{}'", "ℹ".blue().bold(), tool.name.bold());
-                println!("  {} Get your API key here: {}", "→".cyan(), url.underline().blue());
-            }
-        }
     }
 
     // Success message
