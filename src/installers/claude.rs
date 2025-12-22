@@ -59,12 +59,10 @@ impl ClaudeInstaller {
             model
         };
 
-        // Build skills section if present
-        let skills_section = if !agent.skills.is_empty() {
-            let skills_content: String = agent.skills.iter()
-                .map(|s| format!("\n## {}\n\n{}", s.name, s.content))
-                .collect();
-            format!("\n\n---\n# Knowledge Base\n{}", skills_content)
+        // Format skills list for frontmatter
+        let skills_list = if !agent.skills.is_empty() {
+            let names: Vec<String> = agent.skills.iter().map(|s| s.name.clone()).collect();
+            format!("\nskills: {}", names.join(", "))
         } else {
             String::new()
         };
@@ -74,17 +72,16 @@ impl ClaudeInstaller {
 name: {}
 description: {}
 model: {}
-icon: {}
+icon: {}{}
 ---
 
-{}
 {}"#,
             agent.name,
             agent.description,
             model_short,
             icon,
-            agent.identity.system_prompt,
-            skills_section
+            skills_list,
+            agent.identity.system_prompt
         )
     }
 }
@@ -109,7 +106,9 @@ impl Installer for ClaudeInstaller {
         }
 
         let base_dir = self.get_base_dir()?;
-        let skills_dir = base_dir.join("skills").join(&agent.name);
+        // Skills go in ~/.claude/agents/../skills which effectively is ~/.claude/skills
+        // if we assume get_base_dir returns ~/.claude
+        let skills_dir = base_dir.join("skills");
         fs::create_dir_all(&skills_dir)?;
 
         for skill in &agent.skills {
