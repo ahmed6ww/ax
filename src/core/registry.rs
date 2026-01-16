@@ -162,6 +162,7 @@ impl Registry {
             skills: vec![
                 Skill {
                     name: "tokio-patterns".to_string(),
+                    description: Some("Best practices for async programming with Tokio runtime".to_string()),
                     content: r#"# Tokio Best Practices
 
 ## Task Management
@@ -178,9 +179,11 @@ impl Registry {
 - Always set timeouts with `tokio::time::timeout`
 - Use `CancellationToken` for graceful shutdown
 - Handle `JoinError` for task panics"#.to_string(),
+                    ..Default::default()
                 },
                 Skill {
                     name: "error-handling".to_string(),
+                    description: Some("Rust error handling patterns using anyhow and thiserror".to_string()),
                     content: r#"# Rust Error Handling Patterns
 
 ## For Applications (use anyhow)
@@ -206,6 +209,7 @@ pub enum MyError {
     InvalidInput { message: String },
 }
 ```"#.to_string(),
+                    ..Default::default()
                 },
             ],
             mcp: vec![
@@ -265,6 +269,7 @@ pub enum MyError {
             skills: vec![
                 Skill {
                     name: "nextjs-patterns".to_string(),
+                    description: Some("Next.js 15 patterns for Server Components, Client Components, and Server Actions".to_string()),
                     content: r#"# Next.js 15 Patterns
 
 ## Server Components (Default)
@@ -294,6 +299,7 @@ export async function createUser(formData: FormData) {
   // Runs on the server
 }
 ```"#.to_string(),
+                    ..Default::default()
                 },
             ],
             mcp: vec![
@@ -353,6 +359,7 @@ export async function createUser(formData: FormData) {
             skills: vec![
                 Skill {
                     name: "playwright-setup".to_string(),
+                    description: Some("Playwright configuration and Page Object Model patterns for E2E testing".to_string()),
                     content: r#"# Playwright Configuration
 
 ## playwright.config.ts
@@ -383,6 +390,7 @@ export class LoginPage {
   }
 }
 ```"#.to_string(),
+                    ..Default::default()
                 },
             ],
             mcp: vec![

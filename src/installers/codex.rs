@@ -39,36 +39,84 @@ impl CodexInstaller {
         Ok(self.get_base_dir()?.join("skills"))
     }
 
-    /// Generate SKILL.md content per official Codex format
+    /// Generate SKILL.md content per Agent Skills standard
     /// Format:
     /// ---
     /// name: skill-name
-    /// description: Description that helps Codex select the skill
-    /// metadata:
-    ///   short-description: Optional user-facing description
+    /// description: Description that helps select the skill
+    /// allowed-tools: (optional)
     /// ---
     /// Skill instructions...
-    fn generate_skill_md(skill_name: &str, content: &str, agent_description: &str) -> String {
-        // Extract a short description from the first line or use agent description
-        let short_desc = content.lines()
-            .find(|line| !line.trim().is_empty() && !line.starts_with('#'))
-            .map(|s| s.trim().chars().take(100).collect::<String>())
-            .unwrap_or_else(|| agent_description.chars().take(100).collect());
+    fn generate_skill_md(skill: &crate::core::agent::Skill, fallback_description: &str) -> String {
+        let mut frontmatter = format!("---\nname: {}\n", skill.name);
+        
+        // Use skill's own description or fallback to agent description
+        let description = skill.description.as_deref().unwrap_or(fallback_description);
+        frontmatter.push_str(&format!("description: {}\n", description));
+        
+        // Add optional fields per Agent Skills spec
+        if let Some(license) = &skill.license {
+            frontmatter.push_str(&format!("license: {}\n", license));
+        }
+        
+        if let Some(compat) = &skill.compatibility {
+            frontmatter.push_str(&format!("compatibility: {}\n", compat));
+        }
+        
+        if let Some(tools) = &skill.allowed_tools {
+            frontmatter.push_str(&format!("allowed-tools: {}\n", tools));
+        }
+        
+        if let Some(deps) = &skill.dependencies {
+            frontmatter.push_str(&format!("dependencies: {}\n", deps));
+        }
+        
+        // Add metadata if present
+        if let Some(metadata) = &skill.metadata {
+            frontmatter.push_str("metadata:\n");
+            for (key, value) in metadata {
+                frontmatter.push_str(&format!("  {}: {}\n", key, value));
+            }
+        }
+        
+        frontmatter.push_str("---\n\n");
+        frontmatter.push_str(&skill.content);
+        
+        frontmatter
+    }
 
-        format!(
-            r#"---
-name: {}
-description: {}
-metadata:
-  short-description: {}
----
+    /// Copy scripts/, references/, and assets/ subdirectories from source to destination
+    fn copy_skill_subdirectories(source_dir: &std::path::Path, dest_dir: &std::path::Path) -> Result<()> {
+        let subdirs = ["scripts", "references", "assets"];
+        
+        for subdir in &subdirs {
+            let source_subdir = source_dir.join(subdir);
+            if source_subdir.exists() && source_subdir.is_dir() {
+                let dest_subdir = dest_dir.join(subdir);
+                Self::copy_dir_recursive(&source_subdir, &dest_subdir)?;
+            }
+        }
+        
+        Ok(())
+    }
 
-{}"#,
-            skill_name,
-            agent_description.chars().take(500).collect::<String>(),
-            short_desc,
-            content
-        )
+    /// Recursively copy a directory
+    fn copy_dir_recursive(source: &std::path::Path, dest: &std::path::Path) -> Result<()> {
+        fs::create_dir_all(dest)?;
+        
+        for entry in fs::read_dir(source)? {
+            let entry = entry?;
+            let path = entry.path();
+            let dest_path = dest.join(entry.file_name());
+            
+            if path.is_dir() {
+                Self::copy_dir_recursive(&path, &dest_path)?;
+            } else {
+                fs::copy(&path, &dest_path)?;
+            }
+        }
+        
+        Ok(())
     }
 }
 
@@ -88,19 +136,20 @@ impl Installer for CodexInstaller {
         let skills_dir = self.get_skills_dir()?;
 
         // Each skill goes in its own directory with a SKILL.md file
-        // Format: ~/.codex/skills/<skill-name>/SKILL.md
+        // Format: ~/.codex/skills/<skill-name>/SKILL.md (Agent Skills standard)
         for skill in &agent.skills {
             let skill_folder = skills_dir.join(&skill.name);
             fs::create_dir_all(&skill_folder)?;
 
             let skill_file = skill_folder.join("SKILL.md");
-            let skill_content = Self::generate_skill_md(
-                &skill.name,
-                &skill.content,
-                &agent.description
-            );
+            let skill_content = Self::generate_skill_md(skill, &agent.description);
             
             fs::write(&skill_file, skill_content)?;
+
+            // Copy subdirectories (scripts, references, assets) if source_dir exists
+            if let Some(source_dir) = &skill.source_dir {
+                Self::copy_skill_subdirectories(source_dir, &skill_folder)?;
+            }
         }
 
         Ok(())

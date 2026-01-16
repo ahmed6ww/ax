@@ -112,6 +112,87 @@ icon: {}{}
             agent.identity.system_prompt
         )
     }
+
+    /// Generate SKILL.md content per Agent Skills standard
+    /// Format:
+    /// ---
+    /// name: skill-name
+    /// description: Description that helps select the skill
+    /// allowed-tools: (optional)
+    /// ---
+    /// Skill instructions...
+    fn generate_skill_md(skill: &crate::core::agent::Skill) -> String {
+        let mut frontmatter = format!("---\nname: {}\n", skill.name);
+        
+        // Add description (required by Agent Skills spec)
+        if let Some(desc) = &skill.description {
+            frontmatter.push_str(&format!("description: {}\n", desc));
+        }
+        
+        // Add optional fields
+        if let Some(license) = &skill.license {
+            frontmatter.push_str(&format!("license: {}\n", license));
+        }
+        
+        if let Some(compat) = &skill.compatibility {
+            frontmatter.push_str(&format!("compatibility: {}\n", compat));
+        }
+        
+        if let Some(tools) = &skill.allowed_tools {
+            frontmatter.push_str(&format!("allowed-tools: {}\n", tools));
+        }
+        
+        if let Some(deps) = &skill.dependencies {
+            frontmatter.push_str(&format!("dependencies: {}\n", deps));
+        }
+        
+        // Add metadata if present
+        if let Some(metadata) = &skill.metadata {
+            frontmatter.push_str("metadata:\n");
+            for (key, value) in metadata {
+                frontmatter.push_str(&format!("  {}: {}\n", key, value));
+            }
+        }
+        
+        frontmatter.push_str("---\n\n");
+        frontmatter.push_str(&skill.content);
+        
+        frontmatter
+    }
+
+    /// Copy scripts/, references/, and assets/ subdirectories from source to destination
+    fn copy_skill_subdirectories(source_dir: &std::path::Path, dest_dir: &std::path::Path) -> Result<()> {
+        let subdirs = ["scripts", "references", "assets"];
+        
+        for subdir in &subdirs {
+            let source_subdir = source_dir.join(subdir);
+            if source_subdir.exists() && source_subdir.is_dir() {
+                let dest_subdir = dest_dir.join(subdir);
+                Self::copy_dir_recursive(&source_subdir, &dest_subdir)?;
+            }
+        }
+        
+        Ok(())
+    }
+
+    /// Recursively copy a directory
+    fn copy_dir_recursive(source: &std::path::Path, dest: &std::path::Path) -> Result<()> {
+        fs::create_dir_all(dest)?;
+        
+        for entry in fs::read_dir(source)? {
+            let entry = entry?;
+            let path = entry.path();
+            let dest_path = dest.join(entry.file_name());
+            
+            if path.is_dir() {
+                Self::copy_dir_recursive(&path, &dest_path)?;
+            } else {
+                fs::copy(&path, &dest_path)?;
+            }
+        }
+        
+        Ok(())
+    }
 }
 
 impl Installer for ClaudeInstaller {
@@ -134,13 +215,24 @@ impl Installer for ClaudeInstaller {
         }
 
         let base_dir = self.get_base_dir()?;
-        // Skills go in ~/.claude/skills
+        // Skills go in ~/.claude/skills/<skill-name>/SKILL.md (Agent Skills standard)
         let skills_dir = base_dir.join("skills");
         fs::create_dir_all(&skills_dir)?;
 
         for skill in &agent.skills {
-            let skill_file = skills_dir.join(format!("{}.md", skill.name));
-            fs::write(&skill_file, &skill.content)?;
+            // Create skill directory: ~/.claude/skills/<skill-name>/
+            let skill_folder = skills_dir.join(&skill.name);
+            fs::create_dir_all(&skill_folder)?;
+
+            // Generate SKILL.md with proper frontmatter
+            let skill_content = Self::generate_skill_md(skill);
+            let skill_file = skill_folder.join("SKILL.md");
+            fs::write(&skill_file, skill_content)?;
+
+            // Copy subdirectories (scripts, references, assets) if source_dir exists
+            if let Some(source_dir) = &skill.source_dir {
+                Self::copy_skill_subdirectories(source_dir, &skill_folder)?;
+            }
         }
 
         Ok(())

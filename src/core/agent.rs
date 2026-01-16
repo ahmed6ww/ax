@@ -47,14 +47,44 @@ pub struct Identity {
     pub system_prompt: String,
 }
 
-/// Skill definition - becomes markdown files or context
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Skill definition - follows Agent Skills standard (agentskills.io)
+/// Can be loaded from SKILL.md files with YAML frontmatter
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Skill {
-    /// Skill name (used for filename)
+    /// Skill name (must match directory name, lowercase with hyphens)
     pub name: String,
 
-    /// Skill content (markdown or plain text)
+    /// Description of what the skill does and when to use it
+    #[serde(default)]
+    pub description: Option<String>,
+
+    /// Skill content (markdown instructions)
+    #[serde(default)]
     pub content: String,
+
+    /// Space-delimited list of pre-approved tools (experimental)
+    #[serde(default, rename = "allowed-tools")]
+    pub allowed_tools: Option<String>,
+
+    /// License applied to the skill
+    #[serde(default)]
+    pub license: Option<String>,
+
+    /// Environment requirements (e.g., "Requires git, docker")
+    #[serde(default)]
+    pub compatibility: Option<String>,
+
+    /// Custom metadata (author, version, etc.)
+    #[serde(default)]
+    pub metadata: Option<HashMap<String, String>>,
+
+    /// Dependencies required by the skill (e.g., "ruff")
+    #[serde(default)]
+    pub dependencies: Option<String>,
+
+    /// Path to source directory (for copying scripts/references/assets)
+    #[serde(skip)]
+    pub source_dir: Option<std::path::PathBuf>,
 }
 
 /// MCP Tool configuration
