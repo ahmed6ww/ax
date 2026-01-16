@@ -57,33 +57,139 @@ impl Registry {
     }
 
     /// Fetch a specific agent configuration
+    /// If not found, tries to fetch a standalone skill and wrap it in an AgentConfig
     pub async fn fetch_agent(&self, name: &str) -> Result<AgentConfig> {
-        let url = format!("{}/agents/{}.yaml", self.base_url, name);
+        // First try to fetch as an agent
+        let agent_url = format!("{}/agents/{}.yaml", self.base_url, name);
 
         let response = self
             .client
-            .get(&url)
+            .get(&agent_url)
+            .send()
+            .await
+            .context("Failed to connect to registry")?;
+
+        if response.status().is_success() {
+            let yaml = response
+                .text()
+                .await
+                .context("Failed to read agent configuration")?;
+
+            let agent: AgentConfig =
+                serde_yaml::from_str(&yaml).context("Failed to parse agent configuration")?;
+
+            return Ok(agent);
+        }
+
+        // If agent not found, try to fetch as a standalone skill
+        if let Ok(agent) = self.fetch_skill_as_agent(name).await {
+            return Ok(agent);
+        }
+
+        // Try builtin agents as last resort
+        if let Some(agent) = self.get_builtin_agent(name) {
+            return Ok(agent);
+        }
+
+        anyhow::bail!("Agent or skill '{}' not found in registry", name)
+    }
+
+    /// Fetch a standalone skill and wrap it in a minimal AgentConfig
+    async fn fetch_skill_as_agent(&self, name: &str) -> Result<AgentConfig> {
+        use super::agent::Identity;
+
+        let skill_url = format!("{}/{}/SKILL.md", self.base_url, name);
+
+        let response = self
+            .client
+            .get(&skill_url)
             .send()
             .await
             .context("Failed to connect to registry")?;
 
         if !response.status().is_success() {
-            // Try to load from builtin agents
-            if let Some(agent) = self.get_builtin_agent(name) {
-                return Ok(agent);
-            }
-            anyhow::bail!("Agent '{}' not found in registry", name);
+            anyhow::bail!("Skill '{}' not found", name);
         }
 
-        let yaml = response
+        let skill_md = response
             .text()
             .await
-            .context("Failed to read agent configuration")?;
+            .context("Failed to read skill file")?;
 
-        let agent: AgentConfig =
-            serde_yaml::from_str(&yaml).context("Failed to parse agent configuration")?;
+        // Parse SKILL.md (YAML frontmatter + markdown body)
+        let skill = Self::parse_skill_md(name, &skill_md)?;
 
-        Ok(agent)
+        // Create a minimal AgentConfig wrapping the skill
+        Ok(AgentConfig {
+            name: name.to_string(),
+            version: "1.0.0".to_string(),
+            description: skill.description.clone().unwrap_or_else(|| format!("Skill: {}", name)),
+            author: "community".to_string(),
+            identity: Identity {
+                model: None,
+                icon: Some("📚".to_string()),
+                system_prompt: format!("You have the {} skill installed.", name),
+            },
+            skills: vec![skill],
+            mcp: vec![],
+        })
+    }
+
+    /// Parse a SKILL.md file (YAML frontmatter + markdown body)
+    fn parse_skill_md(name: &str, content: &str) -> Result<super::agent::Skill> {
+        use super::agent::Skill;
+
+        // Check for YAML frontmatter (starts with ---)
+        if !content.starts_with("---") {
+            // No frontmatter, treat entire content as skill body
+            return Ok(Skill {
+                name: name.to_string(),
+                content: content.to_string(),
+                ..Default::default()
+            });
+        }
+
+        // Find the end of frontmatter
+        let rest = &content[3..];
+        let end_idx = rest.find("\n---").or_else(|| rest.find("\r\n---"));
+
+        let (frontmatter, body) = match end_idx {
+            Some(idx) => {
+                let fm = rest[..idx].trim();
+                let body_start = idx + 4; // skip "\n---"
+                let body = if body_start < rest.len() {
+                    rest[body_start..].trim_start_matches(['\n', '\r'])
+                } else {
+                    ""
+                };
+                (fm, body)
+            }
+            None => {
+                // No closing ---, treat as no frontmatter
+                return Ok(Skill {
+                    name: name.to_string(),
+                    content: content.to_string(),
+                    ..Default::default()
+                });
+            }
+        };
+
+        // Parse frontmatter as YAML
+        let mut skill: Skill = serde_yaml::from_str(frontmatter)
+            .unwrap_or_else(|_| Skill {
+                name: name.to_string(),
+                ..Default::default()
+            });
+
+        // Set the content from the body
+        skill.content = body.to_string();
+
+        // Ensure name matches the directory
+        if skill.name.is_empty() {
+            skill.name = name.to_string();
+        }
+
+        Ok(skill)
     }
 
     /// Get builtin/demo agents
