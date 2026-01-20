@@ -193,6 +193,53 @@ icon: {}{}
         
         Ok(())
     }
+
+    /// Download scripts/, references/, and assets/ subdirectories from remote URL
+    fn download_skill_subdirectories(remote_base_url: &str, dest_dir: &std::path::Path) -> Result<()> {
+        let subdir_files = [
+            ("scripts", vec!["run_ruff.py", "scaffold_test.py", "main.py", "setup.py"]),
+            ("references", vec!["cleanup_rules.md", "clean_rules.md", "quad_strategy.md", "repo_strategy.md", "clean_arch.md", "REFERENCE.md"]),
+            ("assets", vec!["project_layout.txt", "template.json"]),
+        ];
+
+        for (subdir, files) in &subdir_files {
+            let dest_subdir = dest_dir.join(subdir);
+            let mut any_downloaded = false;
+
+            for file in files {
+                let file_url = format!("{}/{}/{}", remote_base_url, subdir, file);
+                let dest_file = dest_subdir.join(file);
+
+                if Self::download_remote_file(&file_url, &dest_file).is_ok() {
+                    any_downloaded = true;
+                }
+            }
+
+            if any_downloaded && !dest_subdir.exists() {
+                fs::create_dir_all(&dest_subdir)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Download a single file from a remote URL (blocking)
+    fn download_remote_file(url: &str, dest_path: &std::path::Path) -> Result<()> {
+        let response = reqwest::blocking::get(url)?;
+
+        if !response.status().is_success() {
+            anyhow::bail!("File not found: {}", url);
+        }
+
+        if let Some(parent) = dest_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let content = response.bytes()?;
+        fs::write(dest_path, &content)?;
+
+        Ok(())
+    }
 }
 
 impl Installer for ClaudeInstaller {
@@ -229,9 +276,13 @@ impl Installer for ClaudeInstaller {
             let skill_file = skill_folder.join("SKILL.md");
             fs::write(&skill_file, skill_content)?;
 
-            // Copy subdirectories (scripts, references, assets) if source_dir exists
+            // Copy subdirectories (scripts, references, assets)
             if let Some(source_dir) = &skill.source_dir {
+                // Local source - copy directly
                 Self::copy_skill_subdirectories(source_dir, &skill_folder)?;
+            } else if let Some(remote_url) = &skill.remote_base_url {
+                // Remote source - download subdirectories
+                Self::download_skill_subdirectories(remote_url, &skill_folder)?;
             }
         }
 

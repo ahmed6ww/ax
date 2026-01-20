@@ -117,7 +117,10 @@ impl Registry {
             .context("Failed to read skill file")?;
 
         // Parse SKILL.md (YAML frontmatter + markdown body)
-        let skill = Self::parse_skill_md(name, &skill_md)?;
+        let mut skill = Self::parse_skill_md(name, &skill_md)?;
+
+        // Set remote base URL for fetching subdirectories during install
+        skill.remote_base_url = Some(format!("{}/{}", self.base_url, name));
 
         // Create a minimal AgentConfig wrapping the skill
         Ok(AgentConfig {

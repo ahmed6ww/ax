@@ -85,6 +85,10 @@ pub struct Skill {
     /// Path to source directory (for copying scripts/references/assets)
     #[serde(skip)]
     pub source_dir: Option<std::path::PathBuf>,
+
+    /// Remote base URL for fetching subdirectories (scripts/references/assets)
+    #[serde(skip)]
+    pub remote_base_url: Option<String>,
 }
 
 /// MCP Tool configuration
