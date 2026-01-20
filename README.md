@@ -13,18 +13,18 @@
 AX is a Rust-based CLI tool that solves **Configuration Fatigue** in AI-assisted development. Instead of manually configuring System Prompts, MCP Servers, and Documentation files for every new project, developers simply run:
 
 ```bash
-ax install rust-architect
+ax install code-cleaner
 ```
 
-AX acts as a **Transpiler**: It reads a universal `agent.yaml` definition and compiles it into the native format of your environment—whether that's Claude Code or Cursor.
+AX acts as a **Transpiler**: It reads a universal **Agent Skill Standard** definition and compiles it into the native format of your environment—whether that's Claude Code or Cursor.
 
 ## ✨ Features
 
-- 🔄 **Universal Schema**: One `agent.yaml` to rule them all
+- 🔄 **Universal Standard**: Directory-based "Skill" format for rich agent definitions
 - 🦀 **Rust-Powered**: Single binary, blazing fast
 - 🎯 **Multi-Target**: Install to Claude Code or Cursor
 - 🛠️ **MCP Support**: Automatic tool configuration
-- 📚 **Skills System**: Knowledge base as markdown files
+- 📚 **Knowledge Graph**: Static reference files and deterministic scripts
 - 🎨 **Beautiful CLI**: Progress bars and colored output
 
 ## 📦 Installation
@@ -64,13 +64,16 @@ Output:
 ```
   ▶ Available Agents
 
-  NAME                 VERSION    DESCRIPTION                              AUTHOR
-  ─────────────────────────────────────────────────────────────────────────────────
-  rust-architect       1.0.0      Senior Rust Systems Engineer...         ahmed6ww
-  fullstack-next       1.0.0      Next.js 15 + FastAPI + ShadcnUI...      ahmed6ww
-  qa-testing-squad     1.0.0      Playwright + Jest testing...            ahmed6ww
-
-  → 3 agent(s) available
+  NAME                         VERSION    DESCRIPTION
+  ──────────────────────────────────────────────────────────────────────────────────────
+  code-cleaner                 1.0.0      Enforce "Two Hats" refactoring & strict cleanup
+  enterprise-code-architect    2.0.0      Scalable patterns (Hexagonal, Monorepo decisions)
+  fastapi-code-cleaner         1.0.0      Pydantic V2 migration & dead code elimination
+  fastapi-code-structure       2.0.0      Enterprise dispatch-style project layout
+  fastapi-tdd                  1.0.0      "The Quads" testing strategy for Async Python
+  nextjs-code-structure        1.0.0      Feature-sliced design for Scalable Next.js
+  
+  → 6 agent(s) available
   → Install with: ax install <agent-name>
 ```
 
@@ -78,50 +81,45 @@ Output:
 
 ```bash
 # Install to Claude Code (default)
-ax install rust-architect
+ax install code-cleaner
 
 # Install to Cursor
-ax install rust-architect --target cursor
+ax install code-cleaner --target cursor
 
 # Install globally
-ax install rust-architect --global
+ax install code-cleaner --global
 ```
 
-## 📐 The Universal Schema
+## 📐 The Agent Skill Standard
 
-All agents follow the `agent.yaml` schema:
+Agents are no longer single files. They are full directories following the **Skill Standard**:
 
-```yaml
-# agent.yaml - The Source of Truth
-name: "rust-architect"
-version: "1.0.0"
-description: "Senior Rust Systems Engineer"
-author: "ahmed6ww"
+```
+my-agent/
+├── SKILL.md          # The Source of Truth (Metadata + Prompt)
+├── scripts/          # Python/Bash scripts for deterministic actions
+└── references/       # Static knowledge files (MD) for the agent to read
+```
 
-# 1. Identity (The Brain) - Becomes the System Prompt
-identity:
-  model: "claude-3-5-sonnet-latest"
-  icon: "🦀"
-  system_prompt: |
-    You are a specialized Rust subagent.
-    - You prefer composition over inheritance.
-    - You use `anyhow` for apps and `thiserror` for libs.
+### Example: `SKILL.md`
 
-# 2. Skills (The Knowledge) - Becomes Markdown files
-skills:
-  - name: "tokio-patterns"
-    content: |
-      # Tokio Best Practices
-      - Use `tokio::spawn` for async tasks.
-      - Use `task::spawn_blocking` for CPU-heavy work.
+```markdown
+---
+name: code-cleaner
+description: Refactor code to enforce SOLID principles.
+version: 1.0.0
+allowed-tools: "Read,Write,Bash"
+---
 
-# 3. Tools (The Hands) - Becomes MCP Server configs
-mcp:
-  - name: "cargo-mcp"
-    command: "cargo"
-    args: ["mcp-server"]
-    env:
-      RUST_LOG: "info"
+# Code Cleaner Identity
+
+You are a Principal Software Engineer acting as the "Code Janitor."
+You must strictly adhere to the "Two Hats" metaphor.
+
+## Execution Workflow
+
+1. Run Auto-Linter: `python {baseDir}/scripts/run_ruff.py`
+2. Tree Shake: `Read({baseDir}/references/cleanup_rules.md)`
 ```
 
 ## 🏗️ Architecture
@@ -147,33 +145,7 @@ mcp:
 │  │   ClaudeInstaller   │     CursorInstaller      │   │
 │  │   ~/.claude/*       │     .cursor/rules/*       │   │
 │  └─────────────────────┴───────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
-```
-
-## 📁 Output Structure
-
-### Claude Code
-
-```
-~/.claude/
-├── agents/
-│   └── rust-architect.json     # Identity (system prompt)
-├── skills/
-│   └── rust-architect/
-│       ├── tokio-patterns.md   # Skill 1
-│       └── error-handling.md   # Skill 2
-└── claude_desktop_config.json  # MCP tools (patched)
-```
-
-### Cursor
-
-```
-.cursor/
-├── rules/
-│   ├── rust-architect-identity.mdc    # Identity (MDC format)
-│   ├── rust-architect-tokio-patterns.mdc
-│   └── rust-architect-error-handling.mdc
-└── mcp.json                           # MCP tools
+150: └─────────────────────────────────────────────────────────┘
 ```
 
 ## 🛣️ Roadmap
@@ -181,8 +153,8 @@ mcp:
 - [x] Core CLI (init, list, install)
 - [x] Claude Code support
 - [x] Cursor support
+- [x] **Agent Skill Standard (v2)**
 - [ ] VS Code extension
-- [ ] Agent versioning & updates
 - [ ] Private registries
 - [ ] `ax create` template generator
 - [ ] `ax publish` for community agents
