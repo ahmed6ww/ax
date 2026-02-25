@@ -22,11 +22,18 @@ const MATRIX_ROWS = [
   "3ca9 88ad 1f01 ee2d c712 0aef b91d 66f0",
 ];
 
-const MATRIX_STREAM = Array.from({ length: 72 }, (_, rowIndex) => {
+const MATRIX_STREAM_A = Array.from({ length: 74 }, (_, rowIndex) => {
   const base = MATRIX_ROWS[rowIndex % MATRIX_ROWS.length];
   const shift = (rowIndex * 3) % base.length;
   const shifted = `${base.slice(shift)} ${base.slice(0, shift)}`;
-  return Array.from({ length: 18 }, (_, i) => (i % 2 === 0 ? shifted : base)).join(" ");
+  return Array.from({ length: 20 }, (_, i) => (i % 3 === 0 ? shifted : base)).join(" ");
+});
+
+const MATRIX_STREAM_B = Array.from({ length: 67 }, (_, rowIndex) => {
+  const base = MATRIX_ROWS[(rowIndex + 5) % MATRIX_ROWS.length];
+  const shift = (rowIndex * 5 + 11) % base.length;
+  const shifted = `${base.slice(shift)} ${base.slice(0, shift)}`;
+  return Array.from({ length: 16 }, (_, i) => (i % 2 === 0 ? shifted : base)).join(" ");
 });
 
 // 1. THE VOID (HERO)
@@ -43,12 +50,16 @@ const VoidHero = () => {
           <motion.div
             animate={{ y: [0, 16, 0] }}
             transition={{ duration: 28, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute -top-6 left-1/2 -translate-x-1/2 w-[220vw] opacity-60"
+            className="absolute -top-6 left-[46%] -translate-x-1/2 w-[240vw] rotate-[-0.9deg] opacity-60"
           >
-            {MATRIX_STREAM.map((row, i) => (
+            {MATRIX_STREAM_A.map((row, i) => (
               <p
                 key={`matrix-a-${i}`}
                 className="font-mono text-[10px] leading-[10px] tracking-[0.14em] text-emerald-400/45 whitespace-nowrap"
+                style={{
+                  transform: `translateX(${((i * 17) % 150) - 76}px)`,
+                  opacity: 0.3 + ((i * 13) % 40) / 100,
+                }}
               >
                 {row}
               </p>
@@ -58,20 +69,26 @@ const VoidHero = () => {
           <motion.div
             animate={{ x: [0, -24, 0] }}
             transition={{ duration: 32, repeat: Infinity, ease: "linear" }}
-            className="absolute -top-10 left-1/2 -translate-x-1/2 w-[220vw] opacity-35"
+            className="absolute -top-10 left-[55%] -translate-x-1/2 w-[228vw] rotate-[1.4deg] opacity-35"
           >
-            {MATRIX_STREAM.map((row, i) => (
+            {MATRIX_STREAM_B.map((row, i) => (
               <p
                 key={`matrix-b-${i}`}
                 className="font-mono text-[9px] leading-[10px] tracking-[0.16em] text-emerald-300/35 whitespace-nowrap"
+                style={{
+                  transform: `translateX(${((i * 23) % 170) - 85}px)`,
+                  opacity: 0.18 + ((i * 7) % 35) / 100,
+                }}
               >
                 {row}
               </p>
             ))}
           </motion.div>
 
+          <div className="absolute -left-[20%] top-[34%] w-[72%] h-[76%] bg-black/70 rotate-[-12deg] blur-3xl" />
+          <div className="absolute right-[-27%] top-[47%] w-[62%] h-[72%] bg-black/80 rotate-[14deg] blur-[38px]" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.2),transparent_58%)]" />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-black/35 to-black/85" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/12 via-black/34 to-black/86" />
         </div>
 
         {/* The expanding cursor - auto-animates on mount */}
