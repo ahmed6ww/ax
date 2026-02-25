@@ -202,80 +202,95 @@ const HowItWorks = () => {
           </h2>
         </div>
 
-        <div className="border border-white/10 bg-white/[0.02]">
-          <div className="grid grid-cols-1 lg:grid-cols-3 border-b border-white/10">
-            {steps.map((step, i) => (
-              <button
-                key={step.id}
-                onClick={() => setActiveStep(i)}
-                className={`text-left p-6 md:p-7 border-b lg:border-b-0 lg:border-r last:border-r-0 border-white/10 transition-colors ${
-                  activeStep === i ? "bg-emerald-500/[0.06]" : "hover:bg-white/[0.03]"
-                }`}
-              >
-                <p className={`font-mono text-xs tracking-[0.16em] mb-3 ${activeStep === i ? "text-emerald-400" : "text-gray-500"}`}>
-                  {step.id}
-                </p>
-                <p className={`text-xl font-black tracking-tight ${activeStep === i ? "text-emerald-300" : "text-white"}`}>
-                  {step.title}
-                </p>
-                <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-gray-500 mt-3">
-                  {step.signal}
-                </p>
-              </button>
-            ))}
+        <div className="relative">
+          <div className="hidden lg:block absolute left-0 top-12 w-52 h-px bg-emerald-500/30 -rotate-6 origin-left" />
+          <div className="hidden lg:block absolute left-[26%] top-[172px] w-36 h-px bg-emerald-500/20 rotate-[12deg] origin-left" />
+
+          <div className="lg:pr-[40%] space-y-4">
+            {steps.map((step, i) => {
+              const widthClass = i === 0 ? "w-[90%] md:w-[74%]" : i === 1 ? "w-[95%] md:w-[84%]" : "w-[88%] md:w-[70%]";
+              const offsetClass = i === 0 ? "ml-0 md:ml-8" : i === 1 ? "ml-4 md:ml-24" : "ml-2 md:ml-14";
+              const isActive = activeStep === i;
+
+              return (
+                <motion.button
+                  key={step.id}
+                  onClick={() => setActiveStep(i)}
+                  whileHover={{ x: 4 }}
+                  className={`relative block text-left ${widthClass} ${offsetClass}`}
+                >
+                  <span
+                    className={`absolute inset-0 -skew-x-6 border transition-colors ${
+                      isActive
+                        ? "border-emerald-500/70 bg-emerald-500/[0.08]"
+                        : "border-white/10 bg-white/[0.02] hover:border-white/30"
+                    }`}
+                  />
+                  <div className="relative skew-x-6 px-6 py-6 md:px-7 md:py-7">
+                    <div className="flex items-center justify-between gap-5">
+                      <div>
+                        <p className={`font-mono text-xs tracking-[0.16em] mb-3 ${isActive ? "text-emerald-400" : "text-gray-500"}`}>
+                          {step.id}
+                        </p>
+                        <p className={`text-xl md:text-2xl font-black tracking-tight ${isActive ? "text-emerald-300" : "text-white"}`}>
+                          {step.title}
+                        </p>
+                      </div>
+                      <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-gray-500 max-w-[18ch] text-right">
+                        {step.signal}
+                      </p>
+                    </div>
+                  </div>
+                </motion.button>
+              );
+            })}
           </div>
 
           <motion.div
             key={currentStep.id}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, x: 18 }}
+            animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.35 }}
-            className="grid grid-cols-1 lg:grid-cols-[1fr_1.25fr]"
+            className="mt-10 lg:mt-0 lg:absolute lg:right-0 lg:top-1/2 lg:-translate-y-1/2 lg:w-[36%]"
           >
-            <div className="p-8 md:p-10 border-b lg:border-b-0 lg:border-r border-white/10">
-              <p className="text-7xl md:text-8xl font-black tracking-tighter text-white/15 leading-none mb-6">
-                {currentStep.id}
-              </p>
-              <h3 className="text-3xl md:text-4xl font-black tracking-tight text-white mb-5">
-                {currentStep.title}
-              </h3>
-              <p className="text-gray-400 text-lg leading-relaxed max-w-[40ch]">
-                {currentStep.desc}
-              </p>
-            </div>
+            <div className="relative border border-emerald-500/30 bg-black overflow-hidden">
+              <span className="absolute top-0 right-0 w-5 h-5 border-l border-b border-emerald-500/40" />
+              <span className="absolute bottom-0 left-0 w-5 h-5 border-r border-t border-emerald-500/40" />
 
-            <div className="p-6 md:p-8">
-              <div className="border border-emerald-500/30 overflow-hidden bg-black">
-                <div className="flex items-center justify-between border-b border-emerald-500/20 px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-red-400/80" />
-                    <span className="h-2 w-2 rounded-full bg-yellow-400/80" />
-                    <span className="h-2 w-2 rounded-full bg-emerald-400/80" />
-                  </div>
-                  <p className="font-mono text-[11px] tracking-[0.14em] uppercase text-emerald-400">
-                    ax workflow runner
-                  </p>
+              <div className="flex items-center justify-between border-b border-emerald-500/20 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-red-400/80" />
+                  <span className="h-2 w-2 rounded-full bg-yellow-400/80" />
+                  <span className="h-2 w-2 rounded-full bg-emerald-400/80" />
+                </div>
+                <p className="font-mono text-[11px] tracking-[0.14em] uppercase text-emerald-400">
+                  live step {currentStep.id}
+                </p>
+              </div>
+
+              <div className="p-5 md:p-6">
+                <p className="font-mono text-[11px] tracking-[0.16em] uppercase text-emerald-400 mb-3">
+                  {currentStep.signal}
+                </p>
+                <p className="text-gray-400 leading-relaxed mb-5">{currentStep.desc}</p>
+
+                <div className="border border-white/10 bg-black px-4 py-4 font-mono text-xs text-emerald-300 mb-4 break-all">
+                  <span className="text-emerald-500 mr-2">$</span>
+                  {currentStep.command}
                 </div>
 
-                <div className="p-5 md:p-6">
-                  <div className="border border-white/10 bg-black px-4 py-4 font-mono text-xs text-emerald-300 mb-4 break-all">
-                    <span className="text-emerald-500 mr-2">$</span>
-                    {currentStep.command}
-                  </div>
-
-                  <div className="space-y-2">
-                    {currentStep.output.map((line, i) => (
-                      <motion.p
-                        key={`${currentStep.id}-${line}`}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.2, delay: i * 0.07 }}
-                        className="font-mono text-xs text-gray-300"
-                      >
-                        {line}
-                      </motion.p>
-                    ))}
-                  </div>
+                <div className="space-y-2">
+                  {currentStep.output.map((line, i) => (
+                    <motion.p
+                      key={`${currentStep.id}-${line}`}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.2, delay: i * 0.07 }}
+                      className="font-mono text-xs text-gray-300"
+                    >
+                      {line}
+                    </motion.p>
+                  ))}
                 </div>
               </div>
             </div>
@@ -354,8 +369,8 @@ const UseCases = () => {
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.15fr] gap-8">
-          <div className="border border-white/10 bg-white/[0.02] p-3 md:p-4">
+        <div className="flex flex-col lg:flex-row gap-8">
+          <div className="lg:w-[40%] border border-white/10 bg-white/[0.02] p-3 md:p-4">
             {cases.map((item, i) => (
               <button
                 key={item.name}
@@ -392,7 +407,7 @@ const UseCases = () => {
             initial={{ opacity: 0, x: 14 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.35 }}
-            className="border border-emerald-500/30 bg-black overflow-hidden"
+            className="lg:flex-1 border border-emerald-500/30 bg-black overflow-hidden"
           >
             <div className="flex items-center justify-between border-b border-emerald-500/20 px-4 py-3">
               <div className="flex items-center gap-2">
