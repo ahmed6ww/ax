@@ -144,26 +144,51 @@ const TheBeam = () => {
 
 // 4. FLOW (HOW IT WORKS)
 const HowItWorks = () => {
+  const [activeStep, setActiveStep] = useState(0);
+
   const steps = [
     {
       id: "01",
       title: "INIT ONCE",
-      desc: "AX detects your setup and creates a shared config so you stop doing manual setup every new project.",
+      desc: "AX scans your environment and writes a shared config so your setup is no longer random every project.",
       command: "ax init",
+      signal: "~/.ax/config.toml created",
+      output: [
+        "→ Detecting installed editors...",
+        "✓ Claude Code found",
+        "✓ Cursor found",
+        "✓ Config written: ~/.ax/config.toml",
+      ],
     },
     {
       id: "02",
       title: "PICK AN AGENT",
-      desc: "Browse the registry and grab the specialist you need instead of writing massive prompts from scratch.",
+      desc: "Pull a specialist from the registry instead of burning time on giant one-off system prompts.",
       command: "ax list",
+      signal: "registry synced",
+      output: [
+        "→ Fetching registry...",
+        "✓ rust-architect",
+        "✓ fullstack-next",
+        "✓ qa-testing-squad",
+      ],
     },
     {
       id: "03",
       title: "INSTALL TO TARGET",
       desc: "AX installs native files for Claude Code, Cursor, or Codex from the same package definition.",
       command: "ax install rust-architect --target codex",
+      signal: "identity + skills + MCP wired",
+      output: [
+        "→ Installing rust-architect...",
+        "✓ Identity installed",
+        "✓ 2 skill(s) installed",
+        "✓ 1 MCP tool(s) configured",
+      ],
     },
   ];
+
+  const currentStep = steps[activeStep];
 
   return (
     <section className="bg-black py-40 px-8 border-t border-white/10">
@@ -177,24 +202,84 @@ const HowItWorks = () => {
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {steps.map((step, i) => (
-            <motion.div
-              key={step.id}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: i * 0.08 }}
-              viewport={{ once: true, margin: "-15%" }}
-              className="border border-white/10 bg-white/5 p-8"
-            >
-              <p className="text-emerald-500 font-mono text-sm mb-4">{step.id}</p>
-              <h3 className="text-2xl font-black tracking-tight text-white mb-4">{step.title}</h3>
-              <p className="text-gray-400 leading-relaxed mb-8">{step.desc}</p>
-              <div className="border border-white/15 bg-black px-4 py-3 font-mono text-xs text-emerald-400 break-all">
-                {step.command}
+        <div className="border border-white/10 bg-white/[0.02]">
+          <div className="grid grid-cols-1 lg:grid-cols-3 border-b border-white/10">
+            {steps.map((step, i) => (
+              <button
+                key={step.id}
+                onClick={() => setActiveStep(i)}
+                className={`text-left p-6 md:p-7 border-b lg:border-b-0 lg:border-r last:border-r-0 border-white/10 transition-colors ${
+                  activeStep === i ? "bg-emerald-500/[0.06]" : "hover:bg-white/[0.03]"
+                }`}
+              >
+                <p className={`font-mono text-xs tracking-[0.16em] mb-3 ${activeStep === i ? "text-emerald-400" : "text-gray-500"}`}>
+                  {step.id}
+                </p>
+                <p className={`text-xl font-black tracking-tight ${activeStep === i ? "text-emerald-300" : "text-white"}`}>
+                  {step.title}
+                </p>
+                <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-gray-500 mt-3">
+                  {step.signal}
+                </p>
+              </button>
+            ))}
+          </div>
+
+          <motion.div
+            key={currentStep.id}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35 }}
+            className="grid grid-cols-1 lg:grid-cols-[1fr_1.25fr]"
+          >
+            <div className="p-8 md:p-10 border-b lg:border-b-0 lg:border-r border-white/10">
+              <p className="text-7xl md:text-8xl font-black tracking-tighter text-white/15 leading-none mb-6">
+                {currentStep.id}
+              </p>
+              <h3 className="text-3xl md:text-4xl font-black tracking-tight text-white mb-5">
+                {currentStep.title}
+              </h3>
+              <p className="text-gray-400 text-lg leading-relaxed max-w-[40ch]">
+                {currentStep.desc}
+              </p>
+            </div>
+
+            <div className="p-6 md:p-8">
+              <div className="border border-emerald-500/30 overflow-hidden bg-black">
+                <div className="flex items-center justify-between border-b border-emerald-500/20 px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-red-400/80" />
+                    <span className="h-2 w-2 rounded-full bg-yellow-400/80" />
+                    <span className="h-2 w-2 rounded-full bg-emerald-400/80" />
+                  </div>
+                  <p className="font-mono text-[11px] tracking-[0.14em] uppercase text-emerald-400">
+                    ax workflow runner
+                  </p>
+                </div>
+
+                <div className="p-5 md:p-6">
+                  <div className="border border-white/10 bg-black px-4 py-4 font-mono text-xs text-emerald-300 mb-4 break-all">
+                    <span className="text-emerald-500 mr-2">$</span>
+                    {currentStep.command}
+                  </div>
+
+                  <div className="space-y-2">
+                    {currentStep.output.map((line, i) => (
+                      <motion.p
+                        key={`${currentStep.id}-${line}`}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.2, delay: i * 0.07 }}
+                        className="font-mono text-xs text-gray-300"
+                      >
+                        {line}
+                      </motion.p>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </motion.div>
-          ))}
+            </div>
+          </motion.div>
         </div>
       </div>
     </section>
