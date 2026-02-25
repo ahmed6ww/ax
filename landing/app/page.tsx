@@ -544,28 +544,36 @@ const UseCases = () => {
 
 // 6. FAQ
 const FAQ = () => {
+  const [activeFaq, setActiveFaq] = useState(0);
+
   const faqs = [
     {
       q: "Do I need separate prompt files per editor?",
       a: "No. Define once using the Skill standard and AX writes editor-native formats during install.",
+      topic: "write-once-runtime",
     },
     {
       q: "Which targets are supported right now?",
       a: "Claude Code, Cursor, and Codex.",
+      topic: "target-support",
     },
     {
       q: "Can I install globally?",
       a: "Yes. Use --global to install for all projects where supported.",
+      topic: "global-scope",
     },
     {
       q: "Will AX configure MCP tools too?",
       a: "Yes. AX configures MCP entries and can prompt for API keys when a tool requires setup.",
+      topic: "mcp-setup",
     },
   ];
 
+  const currentFaq = faqs[activeFaq];
+
   return (
     <section className="bg-black py-40 px-8 border-t border-white/10">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <div className="mb-12">
           <p className="text-emerald-500 font-mono text-xs tracking-[0.25em] uppercase mb-4">FAQ</p>
           <h2 className="text-5xl md:text-7xl font-black tracking-tighter leading-[0.9] text-white">
@@ -575,18 +583,66 @@ const FAQ = () => {
           </h2>
         </div>
 
-        <div className="space-y-4">
-          {faqs.map((item) => (
-            <details
-              key={item.q}
-              className="group border border-white/10 bg-white/5 p-6 open:border-emerald-500/40"
+        <div className="relative border border-white/10 bg-black overflow-hidden">
+          <div className="absolute inset-0 pointer-events-none opacity-20 bg-[radial-gradient(circle_at_14%_20%,rgba(16,185,129,0.22),transparent_42%),radial-gradient(circle_at_86%_78%,rgba(16,185,129,0.16),transparent_40%)]" />
+          <div className="absolute inset-0 pointer-events-none bg-[repeating-linear-gradient(to_bottom,transparent_0px,transparent_24px,rgba(255,255,255,0.04)_24px,rgba(255,255,255,0.04)_25px)] opacity-40" />
+
+          <div className="relative border-b border-white/10 px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-red-400/80" />
+              <span className="h-2 w-2 rounded-full bg-yellow-400/80" />
+              <span className="h-2 w-2 rounded-full bg-emerald-400/80" />
+            </div>
+            <p className="font-mono text-[11px] tracking-[0.14em] uppercase text-emerald-400">
+              faq command palette
+            </p>
+          </div>
+
+          <div className="relative p-5 md:p-8 lg:p-10">
+            <div className="font-mono text-xs text-emerald-300 border border-white/10 bg-black px-4 py-3 break-all">
+              <span className="text-emerald-500 mr-2">$</span>
+              ax explain --topic {currentFaq.topic}
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              {faqs.map((item, i) => (
+                <button
+                  key={item.q}
+                  onClick={() => setActiveFaq(i)}
+                  className={`px-4 py-2.5 text-left border text-xs font-mono tracking-[0.12em] uppercase transition-colors ${
+                    activeFaq === i
+                      ? "border-emerald-500/60 text-emerald-300 bg-emerald-500/[0.08]"
+                      : "border-white/15 text-gray-300 hover:border-white/40"
+                  }`}
+                >
+                  {`Q0${i + 1}`}
+                </button>
+              ))}
+            </div>
+
+            <motion.div
+              key={currentFaq.q}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="mt-8 relative"
             >
-              <summary className="cursor-pointer list-none text-white font-semibold tracking-tight">
-                {item.q}
-              </summary>
-              <p className="text-gray-400 mt-4 leading-relaxed">{item.a}</p>
-            </details>
-          ))}
+              <div className="absolute -left-2 top-6 w-10 h-px bg-emerald-500/30 rotate-[-18deg]" />
+              <div className="absolute right-3 -top-4 w-16 h-px bg-emerald-500/25 rotate-[24deg]" />
+
+              <div className="border border-emerald-500/35 bg-emerald-500/[0.05] px-6 py-7 md:px-8 md:py-9">
+                <p className="font-mono text-[11px] tracking-[0.16em] uppercase text-emerald-400 mb-3">
+                  {currentFaq.topic}
+                </p>
+                <h3 className="text-2xl md:text-4xl font-black tracking-tight text-white leading-tight mb-5">
+                  {currentFaq.q}
+                </h3>
+                <p className="text-gray-300 text-lg leading-relaxed max-w-[64ch]">
+                  {currentFaq.a}
+                </p>
+              </div>
+            </motion.div>
+          </div>
         </div>
       </div>
     </section>
