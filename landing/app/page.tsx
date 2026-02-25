@@ -445,70 +445,64 @@ const UseCases = () => {
           </h2>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-8">
-          <div className="lg:w-[40%] border border-white/10 bg-white/[0.02] p-3 md:p-4">
-            {cases.map((item, i) => (
-              <button
-                key={item.name}
-                onClick={() => setActiveIndex(i)}
-                className="w-full text-left p-5 md:p-6 border-b border-white/10 last:border-b-0 group cursor-pointer"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-mono text-xs tracking-[0.18em] text-gray-500 mb-3">
-                      0{i + 1}
+        <div className="relative min-h-[560px]">
+          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_72%_24%,rgba(16,185,129,0.2),transparent_40%)]" />
+          <div className="absolute left-[6%] top-24 w-[34%] h-px bg-emerald-500/20 rotate-[-12deg] pointer-events-none" />
+          <div className="absolute right-[8%] top-[58%] w-[28%] h-px bg-emerald-500/15 rotate-[18deg] pointer-events-none" />
+
+          <div className="relative flex flex-col lg:block">
+            <div className="lg:absolute lg:left-0 lg:top-6 lg:w-[34%] space-y-4">
+              {cases.map((item, i) => {
+                const offset = i === 0 ? "lg:ml-0" : i === 1 ? "lg:ml-8" : "lg:ml-3";
+
+                return (
+                  <motion.button
+                    key={item.name}
+                    onClick={() => setActiveIndex(i)}
+                    whileHover={{ x: 5 }}
+                    className={`w-full text-left ${offset}`}
+                  >
+                    <p className={`font-mono text-xs tracking-[0.16em] mb-2 ${activeIndex === i ? "text-emerald-400" : "text-gray-500"}`}>
+                      {`0${i + 1}`} / mode
                     </p>
-                    <h3
-                      className={`text-2xl md:text-3xl font-black tracking-tight transition-colors ${
-                        activeIndex === i ? "text-emerald-400" : "text-white"
-                      }`}
-                    >
+                    <p className={`text-2xl md:text-4xl font-black tracking-tight transition-colors ${activeIndex === i ? "text-white" : "text-gray-500 hover:text-gray-300"}`}>
                       {item.name}
-                    </h3>
-                    <p className="text-gray-400 mt-3 leading-relaxed max-w-[40ch]">{item.desc}</p>
-                  </div>
-
-                  <span
-                    className={`h-2.5 w-2.5 rounded-full mt-2 transition-colors ${
-                      activeIndex === i ? "bg-emerald-400" : "bg-white/20 group-hover:bg-white/40"
-                    }`}
-                  />
-                </div>
-              </button>
-            ))}
-          </div>
-
-          <motion.div
-            key={activeCase.name}
-            initial={{ opacity: 0, x: 14 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.35 }}
-            className="lg:flex-1 border border-emerald-500/30 bg-black overflow-hidden"
-          >
-            <div className="flex items-center justify-between border-b border-emerald-500/20 px-4 py-3">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-red-400/80" />
-                <span className="h-2 w-2 rounded-full bg-yellow-400/80" />
-                <span className="h-2 w-2 rounded-full bg-emerald-400/80" />
-              </div>
-              <p className="font-mono text-xs tracking-[0.16em] uppercase text-emerald-400">
-                Active: {activeCase.name}
-              </p>
+                    </p>
+                    <span className={`block mt-3 h-px transition-all ${activeIndex === i ? "w-[92%] bg-emerald-500/55" : "w-0 bg-emerald-500/40"}`} />
+                  </motion.button>
+                );
+              })}
             </div>
 
-            <div className="p-6 md:p-8">
-              <div className="border border-white/10 bg-black px-4 py-4 font-mono text-xs text-emerald-300 mb-5 break-all">
+            <motion.div
+              key={activeCase.name}
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35 }}
+              className="mt-10 lg:mt-0 lg:ml-[38%] lg:pt-8"
+            >
+              <p className="font-mono text-xs tracking-[0.16em] uppercase text-emerald-400 mb-5">
+                Active Mode / {activeCase.name.toLowerCase()}
+              </p>
+              <h3 className="text-4xl md:text-7xl font-black tracking-tighter text-white leading-[0.92] max-w-[11ch]">
+                {activeCase.name.replace(/-/g, " ")}
+              </h3>
+              <p className="text-gray-400 text-lg leading-relaxed mt-5 max-w-[56ch]">
+                {activeCase.desc}
+              </p>
+
+              <div className="mt-8 font-mono text-sm text-emerald-300 break-all">
                 <span className="text-emerald-500 mr-2">$</span>
                 {activeCase.command}
               </div>
 
-              <div className="space-y-2 mb-6">
+              <div className="mt-6 space-y-2">
                 {activeCase.output.map((line, i) => (
                   <motion.p
                     key={line}
-                    initial={{ opacity: 0, x: -8 }}
+                    initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.25, delay: i * 0.06 }}
+                    transition={{ duration: 0.2, delay: i * 0.06 }}
                     className="font-mono text-xs text-gray-300"
                   >
                     {line}
@@ -516,26 +510,19 @@ const UseCases = () => {
                 ))}
               </div>
 
-              <div className="flex flex-wrap gap-2 mb-8">
-                {activeCase.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="px-3 py-1.5 border border-white/15 text-[11px] uppercase tracking-[0.14em] text-gray-300 font-mono"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
+              <p className="mt-6 font-mono text-xs tracking-[0.16em] uppercase text-gray-400">
+                {activeCase.tags.join(" / ")}
+              </p>
 
               <button
                 onClick={copyCommand}
-                className="inline-flex items-center gap-2 border border-white/15 px-4 py-2.5 text-xs font-mono tracking-[0.12em] uppercase text-white hover:border-emerald-500/60 hover:text-emerald-300 transition-colors"
+                className="mt-8 inline-flex items-center gap-2 font-mono text-xs tracking-[0.12em] uppercase text-white hover:text-emerald-300 transition-colors"
               >
                 {copied === activeCase.name ? <Check size={14} /> : <Copy size={14} />}
                 {copied === activeCase.name ? "Copied" : "Copy Install Command"}
               </button>
-            </div>
-          </motion.div>
+            </motion.div>
+          </div>
         </div>
       </div>
     </section>
