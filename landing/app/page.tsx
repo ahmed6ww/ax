@@ -7,13 +7,72 @@ import { Terminal, Cpu, Globe, Zap, Copy, Check } from 'lucide-react';
 
 // --- COMPONENTS ---
 
+const MATRIX_ROWS = [
+  "7f9a 1cd3 2ef1 9a0c b4e2 d77a 3ee1 c8ab",
+  "a03f b91d 77ca 12fe 89bb 5a0f e12d 44aa",
+  "d1f0 994a 26bc e3f8 09ac 7d11 ff0a 21be",
+  "2bde 8a11 ca09 1ff0 66de 340c 8ba1 de77",
+  "9ad0 22fa ff19 73ca 5e01 bb22 0c8a 4eff",
+  "11be c3d0 77af 9912 a8fd 2ce0 40aa b1d9",
+  "4dd0 ff18 1ca0 7be9 55ad 23e1 81af 60cc",
+  "8a01 b20e ff6c 11ad c90f 33de a72b ef40",
+  "c2de 7a91 3fda 00ac b4ee 2d91 90fa 1a8c",
+  "0fdd a210 ce33 99fe 41bd 7ca0 eed1 52ba",
+  "be77 10df 40af c2ed 9a19 11cc 7f2d a0ee",
+  "3ca9 88ad 1f01 ee2d c712 0aef b91d 66f0",
+];
+
+const MATRIX_STREAM = Array.from({ length: 72 }, (_, rowIndex) => {
+  const base = MATRIX_ROWS[rowIndex % MATRIX_ROWS.length];
+  const shift = (rowIndex * 3) % base.length;
+  const shifted = `${base.slice(shift)} ${base.slice(0, shift)}`;
+  return Array.from({ length: 18 }, (_, i) => (i % 2 === 0 ? shifted : base)).join(" ");
+});
+
 // 1. THE VOID (HERO)
 const VoidHero = () => {
   const [introComplete, setIntroComplete] = useState(false);
 
   return (
     <div className="h-screen relative z-10">
-      <div className="h-screen overflow-hidden flex flex-col items-center justify-center bg-black text-white">
+      <div className="h-screen overflow-hidden flex flex-col items-center justify-center bg-black text-white relative">
+        <div
+          className="absolute inset-x-0 top-0 h-[68%] pointer-events-none overflow-hidden z-0 [mask-image:linear-gradient(to_bottom,black_0%,black_60%,transparent_100%)]"
+          aria-hidden
+        >
+          <motion.div
+            animate={{ y: [0, 16, 0] }}
+            transition={{ duration: 28, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute -top-6 left-1/2 -translate-x-1/2 w-[220vw] opacity-60"
+          >
+            {MATRIX_STREAM.map((row, i) => (
+              <p
+                key={`matrix-a-${i}`}
+                className="font-mono text-[10px] leading-[10px] tracking-[0.14em] text-emerald-400/45 whitespace-nowrap"
+              >
+                {row}
+              </p>
+            ))}
+          </motion.div>
+
+          <motion.div
+            animate={{ x: [0, -24, 0] }}
+            transition={{ duration: 32, repeat: Infinity, ease: "linear" }}
+            className="absolute -top-10 left-1/2 -translate-x-1/2 w-[220vw] opacity-35"
+          >
+            {MATRIX_STREAM.map((row, i) => (
+              <p
+                key={`matrix-b-${i}`}
+                className="font-mono text-[9px] leading-[10px] tracking-[0.16em] text-emerald-300/35 whitespace-nowrap"
+              >
+                {row}
+              </p>
+            ))}
+          </motion.div>
+
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.2),transparent_58%)]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-black/35 to-black/85" />
+        </div>
 
         {/* The expanding cursor - auto-animates on mount */}
         <motion.div
@@ -40,7 +99,7 @@ const VoidHero = () => {
           initial={{ opacity: 1 }}
           animate={{ opacity: 0 }}
           transition={{ delay: 1.5, duration: 0.3 }}
-          className="absolute bottom-10 left-1/2 -translate-x-1/2 text-emerald-500 font-mono text-xs tracking-widest uppercase"
+          className="absolute z-20 bottom-10 left-1/2 -translate-x-1/2 text-emerald-500 font-mono text-xs tracking-widest uppercase"
         >
           Initializing...
         </motion.div>
@@ -50,7 +109,7 @@ const VoidHero = () => {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="absolute bottom-10 left-1/2 -translate-x-1/2 text-emerald-500 font-mono text-xs tracking-widest uppercase animate-bounce"
+            className="absolute z-20 bottom-10 left-1/2 -translate-x-1/2 text-emerald-500 font-mono text-xs tracking-widest uppercase animate-bounce"
           >
             Scroll to explore
           </motion.div>
