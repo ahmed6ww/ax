@@ -1,6 +1,7 @@
 //! CLI Commands Module
 
 pub mod audit;
+pub mod cache;
 pub mod init;
 pub mod install;
 pub mod list;

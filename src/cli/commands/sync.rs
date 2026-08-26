@@ -109,17 +109,23 @@ impl Plan {
     }
 }
 
-pub async fn execute(check: bool, update: bool, assume_yes: bool) -> Result<()> {
-    run(check, update, true, assume_yes).await
+pub async fn execute(check: bool, update: bool, assume_yes: bool, offline: bool) -> Result<()> {
+    run(check, update, true, assume_yes, offline).await
 }
 
 /// Reconcile as a continuation of another command, without opening a second
 /// rail. `install` and `uninstall` announce themselves and then hand over.
 pub(crate) async fn reconcile(assume_yes: bool) -> Result<()> {
-    run(false, false, false, assume_yes).await
+    run(false, false, false, assume_yes, false).await
 }
 
-async fn run(check: bool, update: bool, announce: bool, assume_yes: bool) -> Result<()> {
+async fn run(
+    check: bool,
+    update: bool,
+    announce: bool,
+    assume_yes: bool,
+    offline: bool,
+) -> Result<()> {
     let cwd = std::env::current_dir()?;
     let manifest_path = Manifest::find(&cwd).with_context(|| {
         format!(
@@ -228,7 +234,7 @@ async fn run(check: bool, update: bool, announce: bool, assume_yes: bool) -> Res
         );
     }
 
-    let client = SourceClient::new()?;
+    let client = SourceClient::new()?.offline(offline);
     let mut resolved_lock = Lockfile::new();
 
     // ---- resolve, concurrently --------------------------------------------

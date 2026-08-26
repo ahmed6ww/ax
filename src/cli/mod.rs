@@ -26,6 +26,13 @@ pub enum Commands {
     /// Show what this project has installed
     List,
 
+    /// Inspect or clear the download cache
+    Cache {
+        /// Delete every cached entry
+        #[arg(long, default_value = "false")]
+        clear: bool,
+    },
+
     /// Show what is authorised to run on this machine
     Audit {
         /// Withdraw approval for a name, so agentpm asks again
@@ -64,6 +71,10 @@ pub enum Commands {
         /// Approve anything that will run on your machine without prompting
         #[arg(short = 'y', long, default_value = "false")]
         yes: bool,
+
+        /// Use only cached content; fail rather than reach the network
+        #[arg(long, default_value = "false")]
+        offline: bool,
     },
 
     /// Remove a skill or bundle from agentpm.toml and sync

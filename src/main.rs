@@ -13,15 +13,19 @@ async fn main() {
         Commands::Init => agentpm_lib::cli::commands::init::execute().await,
         Commands::List => agentpm_lib::cli::commands::list::execute().await,
         Commands::Audit { revoke } => agentpm_lib::cli::commands::audit::execute(revoke).await,
+        Commands::Cache { clear } => agentpm_lib::cli::commands::cache::execute(clear).await,
         Commands::Install {
             source,
             rev,
             name,
             yes,
         } => agentpm_lib::cli::commands::install::execute(&source, rev, name, yes).await,
-        Commands::Sync { check, update, yes } => {
-            agentpm_lib::cli::commands::sync::execute(check, update, yes).await
-        }
+        Commands::Sync {
+            check,
+            update,
+            yes,
+            offline,
+        } => agentpm_lib::cli::commands::sync::execute(check, update, yes, offline).await,
         Commands::Uninstall { agent } => {
             agentpm_lib::cli::commands::uninstall::execute(&agent).await
         }

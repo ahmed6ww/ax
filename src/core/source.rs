@@ -17,6 +17,7 @@ use futures::stream::{StreamExt, TryStreamExt};
 use serde::Deserialize;
 use std::time::Duration;
 
+use crate::core::cache::Cache;
 use crate::core::lockfile::{digest, LockedFile};
 
 /// Largest file agentpm will pull into a skill directory.
@@ -141,6 +142,9 @@ struct TreeEntry {
 pub struct SourceClient {
     http: reqwest::Client,
     token: Option<String>,
+    cache: Cache,
+    /// Refuse any network request. Everything pinned still resolves from cache.
+    offline: bool,
 }
 
 impl SourceClient {
@@ -160,7 +164,29 @@ impl SourceClient {
             .ok()
             .filter(|t| !t.trim().is_empty());
 
-        Ok(Self { http, token })
+        Ok(Self {
+            http,
+            token,
+            cache: Cache::open(),
+            offline: false,
+        })
+    }
+
+    /// Serve only from cache; any request that would hit the network fails.
+    pub fn offline(mut self, offline: bool) -> Self {
+        self.offline = offline;
+        self
+    }
+
+    fn refuse_offline(&self, what: &str) -> Result<()> {
+        if self.offline {
+            anyhow::bail!(
+                "Offline: {} is not cached.\n\
+                 Sync once online to populate the cache, or drop --offline.",
+                what
+            );
+        }
+        Ok(())
     }
 
     fn api(&self, url: &str) -> reqwest::RequestBuilder {
@@ -207,6 +233,11 @@ impl SourceClient {
     /// Resolve a branch, tag or commit to an immutable commit SHA.
     pub async fn resolve_commit(&self, source: &GitHubSource, rev: Option<&str>) -> Result<String> {
         let rev = rev.unwrap_or("HEAD");
+        self.refuse_offline(&format!(
+            "{}@{} (a ref must be resolved online)",
+            source.slug(),
+            rev
+        ))?;
         let url = format!(
             "https://api.github.com/repos/{}/{}/commits/{}",
             source.owner, source.repo, rev
@@ -238,26 +269,41 @@ impl SourceClient {
         path: &str,
         keep: &dyn Fn(&str) -> bool,
     ) -> Result<Vec<(String, u64)>> {
-        let url = format!(
-            "https://api.github.com/repos/{}/{}/git/trees/{}?recursive=1",
-            source.owner, source.repo, commit
-        );
+        // A commit's tree never changes, so this is cached indefinitely.
+        let cache_key = Cache::tree_key(&source.owner, &source.repo, commit);
+        let body = match self.cache.get(&cache_key) {
+            Some(cached) => cached,
+            None => {
+                self.refuse_offline(&format!("the file listing for {}", source.slug()))?;
 
-        let response = self.api(&url).send().await.with_context(|| {
-            format!(
-                "Failed to list files in {} at {}",
-                source.slug(),
-                &commit[..7.min(commit.len())]
-            )
-        })?;
-        let response = self
-            .check(response, &format!("listing {}", source.slug()))
-            .await?;
+                let url = format!(
+                    "https://api.github.com/repos/{}/{}/git/trees/{}?recursive=1",
+                    source.owner, source.repo, commit
+                );
 
-        let tree: TreeResponse = response
-            .json()
-            .await
-            .context("Failed to parse the tree response")?;
+                let response = self.api(&url).send().await.with_context(|| {
+                    format!(
+                        "Failed to list files in {} at {}",
+                        source.slug(),
+                        &commit[..7.min(commit.len())]
+                    )
+                })?;
+                let response = self
+                    .check(response, &format!("listing {}", source.slug()))
+                    .await?;
+
+                let bytes = response
+                    .bytes()
+                    .await
+                    .context("Failed to read the tree response")?
+                    .to_vec();
+                self.cache.put(&cache_key, &bytes);
+                bytes
+            }
+        };
+
+        let tree: TreeResponse =
+            serde_json::from_slice(&body).context("Failed to parse the tree response")?;
 
         if tree.truncated {
             anyhow::bail!(
@@ -312,6 +358,13 @@ impl SourceClient {
         commit: &str,
         full_path: &str,
     ) -> Result<Vec<u8>> {
+        // Pinned to a commit, so the content at this path is frozen.
+        let cache_key = Cache::blob_key(&source.owner, &source.repo, commit, full_path);
+        if let Some(cached) = self.cache.get(&cache_key) {
+            return Ok(cached);
+        }
+        self.refuse_offline(full_path)?;
+
         let url = format!(
             "https://raw.githubusercontent.com/{}/{}/{}/{}",
             source.owner, source.repo, commit, full_path
@@ -339,7 +392,9 @@ impl SourceClient {
             anyhow::bail!("{} exceeds the {} byte limit", full_path, MAX_FILE_BYTES);
         }
 
-        Ok(bytes.to_vec())
+        let bytes = bytes.to_vec();
+        self.cache.put(&cache_key, &bytes);
+        Ok(bytes)
     }
 
     /// Resolve and download one skill, pinned to `rev` or to a known commit.

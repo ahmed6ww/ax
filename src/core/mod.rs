@@ -2,6 +2,7 @@
 
 pub mod agent;
 pub mod bundle;
+pub mod cache;
 pub mod config;
 pub mod lockfile;
 pub mod manifest;
