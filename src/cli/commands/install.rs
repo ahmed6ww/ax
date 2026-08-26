@@ -1,7 +1,6 @@
 //! `agentpm install` — install an agent into Claude Code and/or Codex.
 
 use anyhow::{Context, Result};
-use colored::Colorize;
 
 use crate::core::agent::AgentConfig;
 use crate::core::registry::Registry;
@@ -39,38 +38,43 @@ pub async fn execute(agent_name: &str, target: Option<TargetArg>, global: bool) 
     let targets = resolve_targets(target)?;
     let scope = Scope::from_global_flag(global);
 
-    ui::print_header(&format!("Installing {}", agent_name));
+    ui::intro(&format!("agentpm install {}", agent_name));
 
-    let spinner = ui::create_spinner("Fetching agent configuration...");
+    let spinner = ui::Spinner::start("Fetching agent configuration…");
     let registry = Registry::new();
     let agent: AgentConfig = registry
         .fetch_agent(agent_name)
         .await
         .with_context(|| format!("Could not resolve agent '{}'", agent_name))?;
-    spinner.finish_with_message(format!(
-        "{} Found {} v{}",
-        "✓".green(),
-        agent.name,
-        agent.version
+    spinner.stop(&format!(
+        "{} {}",
+        ui::bold(&agent.name),
+        ui::dim(&format!("v{}", agent.version))
     ));
 
-    println!("\n{} Checking dependencies...", "→".cyan());
     let missing = validation::check_agent_dependencies(&agent);
     if missing.is_empty() {
-        println!("  {} All dependencies satisfied", "✓".green());
+        ui::step("All dependencies satisfied");
     } else {
-        println!();
-        for tool in &missing {
-            println!(
-                "  {} {} is required but not found in PATH",
-                "⚠".yellow().bold(),
-                tool.as_str().bold()
+        let detail = missing
+            .iter()
+            .map(|tool| {
+                let hint = validation::get_install_hint(tool)
+                    .map(|h| format!("  {}", ui::dim(h)))
+                    .unwrap_or_default();
+                format!("{} not on PATH{}", ui::bold(tool), hint)
+            })
+            .collect::<Vec<_>>()
+            .join(
+                "
+",
             );
-            if let Some(hint) = validation::get_install_hint(tool) {
-                println!("    {}", hint.dimmed());
-            }
-        }
-        println!();
+        ui::warning(&format!(
+            "{} missing — those MCP servers will not start
+{}",
+            missing.len(),
+            detail
+        ));
     }
 
     let agent = super::prompt_for_api_keys(agent)?;
@@ -78,56 +82,63 @@ pub async fn execute(agent_name: &str, target: Option<TargetArg>, global: bool) 
     for target in targets {
         let installer = get_installer(target, scope);
         let caps = installer.capabilities();
-
-        println!(
-            "\n  {} {} ({} scope) → {}",
-            "▸".cyan().bold(),
-            target.display_name().bold(),
-            scope.display_name(),
-            installer.location().dimmed()
-        );
+        let mut lines: Vec<String> = Vec::new();
 
         if caps.subagents {
             installer.install_identity(&agent)?;
-            println!("    {} Subagent installed", "✓".green());
+            lines.push(format!("{} subagent", ui::good("✓")));
         } else {
-            println!(
-                "    {} No subagent support — identity installed as a skill",
-                "·".dimmed()
-            );
+            lines.push(ui::dim(
+                "· no subagent support — identity installed as a skill",
+            ));
         }
 
         if caps.skills {
             installer.install_skills(&agent)?;
             let count = agent.skills.len() + if caps.subagents { 0 } else { 1 };
-            println!("    {} {} skill(s) installed", "✓".green(), count);
+            lines.push(format!(
+                "{} {} skill{}",
+                ui::good("✓"),
+                count,
+                if count == 1 { "" } else { "s" }
+            ));
         }
 
         if !agent.mcp.is_empty() {
             if caps.mcp {
                 installer.install_tools(&agent)?;
-                println!(
-                    "    {} {} MCP server(s) configured",
-                    "✓".green(),
-                    agent.mcp.len()
-                );
+                lines.push(format!(
+                    "{} {} MCP server{}",
+                    ui::good("✓"),
+                    agent.mcp.len(),
+                    if agent.mcp.len() == 1 { "" } else { "s" }
+                ));
             } else {
-                println!(
-                    "    {} {} MCP server(s) skipped — not supported by {}",
-                    "·".dimmed(),
+                lines.push(ui::dim(&format!(
+                    "· {} MCP server(s) skipped — unsupported by {}",
                     agent.mcp.len(),
                     target.display_name()
-                );
+                )));
             }
         }
+
+        ui::success(&format!(
+            "{}   {}
+{}",
+            ui::bold(target.display_name()),
+            ui::dim(&installer.location()),
+            lines.join(
+                "
+"
+            )
+        ));
     }
 
-    println!();
-    ui::print_success(&format!("{} installed.", agent.name));
-    println!(
-        "\n  {} Restart your agent to pick up the new configuration.",
-        "→".cyan()
+    ui::note(
+        "Next",
+        "Restart your agent to pick up the new configuration.",
     );
+    ui::outro(&format!("{} installed", agent.name));
 
     Ok(())
 }

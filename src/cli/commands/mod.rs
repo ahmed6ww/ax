@@ -7,17 +7,16 @@ pub mod sync;
 pub mod uninstall;
 
 use anyhow::Result;
-use colored::Colorize;
 
 use crate::core::agent::AgentConfig;
+use crate::utils::ui;
 
 /// Prompt for any API key an MCP server declares via `setup_url`.
 ///
 /// Only the placeholder whose value is a `${...}` reference is replaced, so one
-/// key cannot be sprayed into unrelated environment variables.
+/// key cannot be sprayed into unrelated environment variables. Input is masked,
+/// because an echoed key ends up in scrollback and screen recordings.
 pub fn prompt_for_api_keys(mut agent: AgentConfig) -> Result<AgentConfig> {
-    use std::io::Write;
-
     for tool in &mut agent.mcp {
         let Some(url) = tool.setup_url.clone() else {
             continue;
@@ -34,34 +33,31 @@ pub fn prompt_for_api_keys(mut agent: AgentConfig) -> Result<AgentConfig> {
             continue;
         }
 
-        println!();
-        println!(
-            "  {} MCP server '{}' needs an API key",
-            "ℹ".blue().bold(),
-            tool.name.bold()
-        );
-        println!("  {} Get one at: {}", "→".cyan(), url.underline().blue());
+        ui::info(&format!(
+            "{} needs an API key
+{}",
+            ui::bold(&tool.name),
+            ui::dim(&format!("Get one at {}", url))
+        ));
 
         for key in placeholders {
-            print!(
-                "  {} {} (Enter to leave as an environment reference): ",
-                "?".yellow().bold(),
-                key.bold()
-            );
-            std::io::stdout().flush().ok();
+            // Non-interactive runs leave the environment reference in place
+            // rather than blocking on stdin.
+            if !ui::is_rich() {
+                continue;
+            }
 
-            let entered = rpassword::prompt_password("").unwrap_or_default();
+            let entered = ui::secret(&format!("{} (Enter to skip)", key))?;
             let entered = entered.trim();
 
             if entered.is_empty() {
-                println!(
-                    "  {} Left as ${{{}}} — export it in your shell",
-                    "·".dimmed(),
-                    key
-                );
+                ui::step(&ui::dim(&format!(
+                    "{} left as ${{{}}} — export it in your shell",
+                    key, key
+                )));
             } else {
                 tool.env.insert(key.clone(), entered.to_string());
-                println!("  {} {} set", "✓".green(), key);
+                ui::step(&format!("{} set", key));
             }
         }
     }

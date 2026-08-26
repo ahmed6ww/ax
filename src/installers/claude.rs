@@ -257,7 +257,7 @@ impl Installer for ClaudeInstaller {
 
     fn location(&self) -> String {
         match self.skills_dir() {
-            Ok(p) => p.display().to_string(),
+            Ok(path) => crate::utils::paths::display_relative(&path),
             Err(_) => "<unresolved>".to_string(),
         }
     }

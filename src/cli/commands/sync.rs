@@ -10,15 +10,21 @@
 //!   on drift. This is the CI gate.
 
 use anyhow::{Context, Result};
-use colored::Colorize;
+use futures::stream::{StreamExt, TryStreamExt};
 
 use crate::core::bundle::BundleManifest;
 use crate::core::lockfile::{digest, tree_digest, LockedBundle, LockedMcp, LockedSkill, Lockfile};
-use crate::core::manifest::Manifest;
-use crate::core::source::{GitHubSource, SourceClient};
+use crate::core::manifest::{Manifest, SkillSpec};
+use crate::core::source::{GitHubSource, ResolvedSkill, SourceClient};
 use crate::installers::{get_installer, SettingsContribution, Target};
-use crate::utils::paths::Scope;
 use crate::utils::ui;
+
+/// Sources resolved at once. Enough to hide latency, low enough to stay well
+/// inside GitHub's rate limit on an unauthenticated run.
+const RESOLVE_CONCURRENCY: usize = 4;
+
+/// Exit code returned by `--check` when the tree has drifted.
+pub const DRIFT_EXIT_CODE: i32 = 2;
 
 /// A skill's files, ready to write: `(relative path, bytes)`.
 type SkillPayload = (String, Vec<(String, Vec<u8>)>);
@@ -57,8 +63,50 @@ fn stem(path: &str) -> &str {
         .unwrap_or(path)
 }
 
-/// Exit code returned by `--check` when the tree has drifted.
-pub const DRIFT_EXIT_CODE: i32 = 2;
+fn plural(n: usize, word: &str) -> String {
+    format!("{} {}{}", n, word, if n == 1 { "" } else { "s" })
+}
+
+/// One source to resolve, with everything it needs owned so the fetch can run
+/// concurrently with the others.
+struct Plan {
+    name: String,
+    source: GitHubSource,
+    path: String,
+    rev: Option<String>,
+    pinned: Option<String>,
+}
+
+impl Plan {
+    fn build(
+        name: &str,
+        spec: &SkillSpec,
+        locked: Option<(&str, &str, &str)>,
+        update: bool,
+    ) -> Result<Self> {
+        let source = GitHubSource::parse(spec.source())?;
+        let path = spec.path(name).trim_matches('/').to_string();
+
+        // Reuse the locked commit unless asked to update. This is what makes a
+        // second machine reproduce the first rather than pick up a new HEAD.
+        let pinned = match locked {
+            Some((locked_source, locked_path, resolved))
+                if !update && locked_source == source.slug() && locked_path == path =>
+            {
+                Some(resolved.to_string())
+            }
+            _ => None,
+        };
+
+        Ok(Self {
+            name: name.to_string(),
+            source,
+            path,
+            rev: spec.rev().map(str::to_string),
+            pinned,
+        })
+    }
+}
 
 pub async fn execute(check: bool, update: bool) -> Result<()> {
     let cwd = std::env::current_dir()?;
@@ -73,35 +121,40 @@ pub async fn execute(check: bool, update: bool) -> Result<()> {
     let manifest = Manifest::load(&manifest_path)?;
     let (targets, scope) = manifest.targets.resolve()?;
 
-    ui::print_header(if check {
-        "Checking agent setup"
+    ui::intro(if check {
+        "agentpm check"
     } else {
-        "Syncing agent setup"
+        "agentpm sync"
     });
-    println!(
-        "  {} {}",
-        "manifest".dimmed(),
-        manifest_path.display().to_string().cyan()
-    );
-    println!(
-        "  {} {}  {} {} scope\n",
-        "targets".dimmed(),
+
+    ui::step(&format!(
+        "{}\n{}  {}  {} scope",
+        ui::dim(
+            &manifest_path
+                .strip_prefix(&project_root)
+                .unwrap_or(&manifest_path)
+                .display()
+                .to_string()
+        ),
         targets
             .iter()
-            .map(|t| t.display_name())
+            .map(|t| ui::bold(t.display_name()))
             .collect::<Vec<_>>()
             .join(", "),
-        "·".dimmed(),
+        ui::dim("·"),
         scope.display_name()
-    );
+    ));
 
     if manifest.is_empty() {
-        ui::print_warning("Nothing declared yet.");
-        println!(
-            "  {} Add skills under [skills] in {}.",
-            "→".cyan(),
-            crate::core::manifest::MANIFEST_FILE
+        ui::warning("Nothing declared yet");
+        ui::note(
+            "Add a skill",
+            &format!(
+                "[skills]\nfind-skills = {{ source = \"vercel-labs/skills\", path = \"skills/find-skills\" }}\n\nthen run agentpm sync again ({})",
+                crate::core::manifest::MANIFEST_FILE
+            ),
         );
+        ui::outro("Nothing to do");
         return Ok(());
     }
 
@@ -113,43 +166,154 @@ pub async fn execute(check: bool, update: bool) -> Result<()> {
     };
 
     if check && existing.is_none() {
+        ui::outro_cancel("Nothing to check against");
         anyhow::bail!(
-            "No {} to check against. Run `agentpm sync` and commit the result.",
+            "No {} in this project. Run `agentpm sync` and commit the result.",
             crate::core::lockfile::LOCKFILE
         );
     }
 
     let client = SourceClient::new()?;
     let mut resolved_lock = Lockfile::new();
-    let mut installed: Vec<SkillPayload> = Vec::new();
 
-    // ---- skills -----------------------------------------------------------
-    for (name, spec) in &manifest.skills {
-        let source = GitHubSource::parse(spec.source())?;
-        let path = spec.path(name);
-
-        // Reuse the locked commit unless asked to update. This is what makes a
-        // second machine reproduce the first rather than pick up a new HEAD.
-        let pinned = if update {
-            None
-        } else {
-            existing
+    // ---- resolve, concurrently --------------------------------------------
+    let skill_plans: Vec<Plan> = manifest
+        .skills
+        .iter()
+        .map(|(name, spec)| {
+            let locked = existing
                 .as_ref()
                 .and_then(|l| l.skill(name))
-                .filter(|l| l.source == source.slug() && l.path == path.trim_matches('/'))
-                .map(|l| l.resolved.clone())
-        };
+                .map(|l| (l.source.as_str(), l.path.as_str(), l.resolved.as_str()));
+            Plan::build(name, spec, locked, update)
+        })
+        .collect::<Result<_>>()?;
 
-        let spinner = ui::create_spinner(&format!("Resolving {}...", name));
-        let fetched = client
-            .fetch_skill(&source, path, spec.rev(), pinned.as_deref())
-            .await
-            .with_context(|| format!("Failed to resolve skill '{}'", name))?;
-        spinner.finish_and_clear();
+    let bundle_plans: Vec<Plan> = manifest
+        .bundles
+        .iter()
+        .map(|(name, spec)| {
+            let locked = existing
+                .as_ref()
+                .and_then(|l| l.bundle(name))
+                .map(|l| (l.source.as_str(), l.path.as_str(), l.resolved.as_str()));
+            Plan::build(name, spec, locked, update)
+        })
+        .collect::<Result<_>>()?;
 
+    let total = skill_plans.len() + bundle_plans.len();
+    let multi = ui::MultiProgress::start("Resolving…");
+
+    // Progress bars are transient: a stopped bar may be cleared from the
+    // screen. Every resolved source also records a line here so the listing
+    // survives as part of the run's permanent output.
+    let resolved_lines = std::sync::Mutex::new(Vec::<String>::new());
+
+    let skill_results: Vec<(Plan, ResolvedSkill)> =
+        futures::stream::iter(skill_plans.into_iter().map(|plan| {
+            let bar = multi.add(&plan.name);
+            let client = &client;
+            let lines = &resolved_lines;
+            async move {
+                let result = client
+                    .fetch_skill(
+                        &plan.source,
+                        &plan.path,
+                        plan.rev.as_deref(),
+                        plan.pinned.as_deref(),
+                    )
+                    .await;
+                match &result {
+                    Ok(fetched) => {
+                        let line = format!(
+                            "{} {:<26} {}  {}",
+                            ui::good("✓"),
+                            plan.name,
+                            ui::dim(&ui::short_sha(&fetched.resolved)),
+                            ui::dim(&plural(fetched.files.len(), "file"))
+                        );
+                        bar.stop(&line);
+                        lines.lock().unwrap().push(line);
+                    }
+                    Err(_) => bar.stop(&ui::bad(&format!("{}  unresolved", plan.name))),
+                }
+                let name = plan.name.clone();
+                result
+                    .map(|fetched| (plan, fetched))
+                    .with_context(|| format!("Failed to resolve skill '{}'", name))
+            }
+        }))
+        .buffer_unordered(RESOLVE_CONCURRENCY)
+        .try_collect()
+        .await?;
+
+    let bundle_results: Vec<(Plan, BundleManifest, ResolvedSkill)> =
+        futures::stream::iter(bundle_plans.into_iter().map(|plan| {
+            let bar = multi.add(&plan.name);
+            let client = &client;
+            let lines = &resolved_lines;
+            async move {
+                let result = client
+                    .fetch_bundle(
+                        &plan.source,
+                        &plan.path,
+                        plan.rev.as_deref(),
+                        plan.pinned.as_deref(),
+                    )
+                    .await;
+                match &result {
+                    Ok((bundle, fetched)) => {
+                        let line = format!(
+                            "{} {:<26} {}  {}",
+                            ui::good("✓"),
+                            plan.name,
+                            ui::dim(&ui::short_sha(&fetched.resolved)),
+                            ui::dim(&format!(
+                                "bundle · {}",
+                                bundle
+                                    .summary()
+                                    .iter()
+                                    .map(|(label, n)| plural(*n, label))
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            ))
+                        );
+                        bar.stop(&line);
+                        lines.lock().unwrap().push(line);
+                    }
+                    Err(_) => bar.stop(&ui::bad(&format!("{}  unresolved", plan.name))),
+                }
+                let name = plan.name.clone();
+                result
+                    .map(|(bundle, fetched)| (plan, bundle, fetched))
+                    .with_context(|| format!("Failed to resolve bundle '{}'", name))
+            }
+        }))
+        .buffer_unordered(RESOLVE_CONCURRENCY)
+        .try_collect()
+        .await?;
+
+    multi.stop();
+
+    let mut lines = resolved_lines.into_inner().unwrap();
+    lines.sort();
+    ui::step(&format!(
+        "Resolved {}
+{}",
+        plural(total, "source"),
+        lines.join(
+            "
+"
+        )
+    ));
+
+    // ---- lock entries ------------------------------------------------------
+    let mut installed: Vec<SkillPayload> = Vec::new();
+
+    for (plan, fetched) in skill_results {
         let files: Vec<_> = fetched.files.iter().map(|f| f.locked()).collect();
         let locked = LockedSkill {
-            name: name.clone(),
+            name: plan.name.clone(),
             source: fetched.source.clone(),
             source_url: fetched.source_url.clone(),
             path: fetched.path.clone(),
@@ -159,33 +323,18 @@ pub async fn execute(check: bool, update: bool) -> Result<()> {
             files,
         };
 
-        // A pinned commit is immutable, so identical bytes are guaranteed. A
-        // mismatch means the lock and the source disagree about history.
-        if let (Some(prev), Some(_)) = (existing.as_ref().and_then(|l| l.skill(name)), &pinned) {
-            if prev.digest != locked.digest {
-                anyhow::bail!(
-                    "Integrity check failed for '{}'.\n  \
-                     {} is pinned to {} but its contents no longer match the lockfile.\n  \
-                     The source may have been rewritten. Inspect it, then run \
-                     `agentpm sync --update` if the change is expected.",
-                    name,
-                    fetched.source,
-                    &fetched.resolved[..12.min(fetched.resolved.len())]
-                );
-            }
-        }
-
-        let short = &locked.resolved[..7.min(locked.resolved.len())];
-        println!(
-            "  {} {:<28} {} {} file(s)",
-            "✓".green(),
-            name.bold(),
-            short.dimmed(),
-            locked.files.len()
-        );
+        verify_pin(
+            existing
+                .as_ref()
+                .and_then(|l| l.skill(&plan.name))
+                .map(|l| l.digest.as_str()),
+            &plan,
+            &locked.digest,
+            &fetched.resolved,
+        )?;
 
         installed.push((
-            name.clone(),
+            plan.name.clone(),
             fetched
                 .files
                 .into_iter()
@@ -195,33 +344,12 @@ pub async fn execute(check: bool, update: bool) -> Result<()> {
         resolved_lock.skills.push(locked);
     }
 
-    // ---- bundles ----------------------------------------------------------
     let mut bundles: Vec<(String, BundlePayload)> = Vec::new();
 
-    for (name, spec) in &manifest.bundles {
-        let source = GitHubSource::parse(spec.source())?;
-        let path = spec.path(name);
-
-        let pinned = if update {
-            None
-        } else {
-            existing
-                .as_ref()
-                .and_then(|l| l.bundle(name))
-                .filter(|l| l.source == source.slug() && l.path == path.trim_matches('/'))
-                .map(|l| l.resolved.clone())
-        };
-
-        let spinner = ui::create_spinner(&format!("Resolving bundle {}...", name));
-        let (bundle_manifest, fetched) = client
-            .fetch_bundle(&source, path, spec.rev(), pinned.as_deref())
-            .await
-            .with_context(|| format!("Failed to resolve bundle '{}'", name))?;
-        spinner.finish_and_clear();
-
+    for (plan, bundle_manifest, fetched) in bundle_results {
         let files: Vec<_> = fetched.files.iter().map(|f| f.locked()).collect();
         let locked = LockedBundle {
-            name: name.clone(),
+            name: plan.name.clone(),
             source: fetched.source.clone(),
             source_url: fetched.source_url.clone(),
             path: fetched.path.clone(),
@@ -235,33 +363,18 @@ pub async fn execute(check: bool, update: bool) -> Result<()> {
             files,
         };
 
-        if let (Some(prev), Some(_)) = (existing.as_ref().and_then(|l| l.bundle(name)), &pinned) {
-            if prev.digest != locked.digest {
-                anyhow::bail!(
-                    "Integrity check failed for bundle '{}'.
-                       {} is pinned to {} but its contents no longer match the lockfile.",
-                    name,
-                    fetched.source,
-                    &fetched.resolved[..12.min(fetched.resolved.len())]
-                );
-            }
-        }
-
-        let summary: Vec<String> = bundle_manifest
-            .summary()
-            .iter()
-            .map(|(label, n)| format!("{} {}{}", n, label, if *n == 1 { "" } else { "s" }))
-            .collect();
-        println!(
-            "  {} {:<28} {} {}",
-            "✓".green(),
-            name.bold(),
-            locked.resolved[..7.min(locked.resolved.len())].dimmed(),
-            summary.join(", ").dimmed()
-        );
+        verify_pin(
+            existing
+                .as_ref()
+                .and_then(|l| l.bundle(&plan.name))
+                .map(|l| l.digest.as_str()),
+            &plan,
+            &locked.digest,
+            &fetched.resolved,
+        )?;
 
         bundles.push((
-            name.clone(),
+            plan.name.clone(),
             BundlePayload {
                 manifest: bundle_manifest,
                 files: fetched
@@ -313,42 +426,35 @@ pub async fn execute(check: bool, update: bool) -> Result<()> {
         let previous = existing.expect("checked above");
         let drift = previous.diff(&resolved_lock);
 
-        println!();
         if drift.is_empty() {
-            ui::print_success("In sync. No drift.");
+            ui::success("No drift — every machine resolves these commits");
+            ui::outro("In sync");
             return Ok(());
         }
 
-        ui::print_error(&format!(
-            "{} change(s) not reflected in the lockfile:",
-            drift.len()
+        ui::error(&format!(
+            "{} not reflected in {}\n{}",
+            plural(drift.len(), "change"),
+            crate::core::lockfile::LOCKFILE,
+            drift
+                .iter()
+                .map(|d| d.to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
         ));
-        println!();
-        for item in &drift {
-            println!("    {}", item);
-        }
-        println!();
-        println!(
-            "  {} Run {} and commit {}.",
-            "→".cyan(),
-            "agentpm sync".cyan().bold(),
+        ui::outro_cancel(&format!(
+            "Out of sync — run `agentpm sync` and commit {}",
             crate::core::lockfile::LOCKFILE
-        );
+        ));
         std::process::exit(DRIFT_EXIT_CODE);
     }
 
     // ---- install ----------------------------------------------------------
-    println!();
     for target in &targets {
         let installer = get_installer(*target, scope);
         let caps = installer.capabilities();
-
-        println!(
-            "  {} {} → {}",
-            "▸".cyan().bold(),
-            target.display_name().bold(),
-            installer.location().dimmed()
-        );
+        let mut lines: Vec<String> = Vec::new();
+        let mut contribution = SettingsContribution::default();
 
         for (name, files) in &installed {
             installer.install_files(name, files).with_context(|| {
@@ -356,48 +462,67 @@ pub async fn execute(check: bool, update: bool) -> Result<()> {
             })?;
         }
         if !installed.is_empty() {
-            println!("    {} {} skill(s)", "✓".green(), installed.len());
+            lines.push(format!(
+                "{} {}",
+                ui::good("✓"),
+                plural(installed.len(), "skill")
+            ));
         }
 
-        // ---- bundles ------------------------------------------------------
-        let mut contribution = SettingsContribution::default();
-
         for (bundle_name, payload) in &bundles {
-            let manifest = &payload.manifest;
+            let bundle = &payload.manifest;
 
-            for dir in &manifest.skills {
+            for dir in &bundle.skills {
                 installer
                     .install_files(stem(dir), &payload.skill_files(dir))
                     .with_context(|| format!("Failed to install skill '{}'", dir))?;
             }
+            if !bundle.skills.is_empty() {
+                lines.push(format!(
+                    "{} {} {}",
+                    ui::good("✓"),
+                    plural(bundle.skills.len(), "skill"),
+                    ui::dim(&format!("from {}", bundle_name))
+                ));
+            }
 
-            if caps.subagents {
-                for path in &manifest.agents {
+            if caps.subagents && !bundle.agents.is_empty() {
+                for path in &bundle.agents {
                     let bytes = payload
                         .file(path)
                         .with_context(|| format!("Bundle '{}' is missing {}", bundle_name, path))?;
                     installer.install_subagent(stem(path), bytes)?;
                 }
+                lines.push(format!(
+                    "{} {}",
+                    ui::good("✓"),
+                    plural(bundle.agents.len(), "subagent")
+                ));
             }
 
-            if caps.commands {
-                for path in &manifest.commands {
+            if caps.commands && !bundle.commands.is_empty() {
+                for path in &bundle.commands {
                     let bytes = payload
                         .file(path)
                         .with_context(|| format!("Bundle '{}' is missing {}", bundle_name, path))?;
                     installer.install_command(stem(path), bytes)?;
                 }
+                lines.push(format!(
+                    "{} {}",
+                    ui::good("✓"),
+                    plural(bundle.commands.len(), "command")
+                ));
             }
 
-            if caps.hooks && !manifest.hooks.is_empty() {
-                let scripts: Vec<(String, Vec<u8>)> = manifest
+            if caps.hooks && !bundle.hooks.is_empty() {
+                let scripts: Vec<(String, Vec<u8>)> = bundle
                     .scripts
                     .iter()
                     .filter_map(|p| payload.file(p).map(|b| (p.clone(), b.clone())))
                     .collect();
 
                 if let Some(dir) = installer.stage_bundle_files(bundle_name, &scripts)? {
-                    for hook in &manifest.hooks {
+                    for hook in &bundle.hooks {
                         // An absolute path keeps the hook working regardless of
                         // the directory Claude Code is started from.
                         let resolved = dir.join(&hook.command).display().to_string();
@@ -410,60 +535,69 @@ pub async fn execute(check: bool, update: bool) -> Result<()> {
                 contribution
                     .permissions
                     .allow
-                    .extend(manifest.permissions.allow.clone());
+                    .extend(bundle.permissions.allow.clone());
                 contribution
                     .permissions
                     .deny
-                    .extend(manifest.permissions.deny.clone());
+                    .extend(bundle.permissions.deny.clone());
                 contribution
                     .permissions
                     .ask
-                    .extend(manifest.permissions.ask.clone());
-            }
-
-            let skipped = caps.unsupported(manifest);
-            let installed_here = manifest.skills.len()
-                + if caps.subagents {
-                    manifest.agents.len()
-                } else {
-                    0
-                }
-                + if caps.commands {
-                    manifest.commands.len()
-                } else {
-                    0
-                };
-            println!(
-                "    {} bundle {} ({} item(s))",
-                "✓".green(),
-                bundle_name.bold(),
-                installed_here
-            );
-            if !skipped.is_empty() {
-                println!(
-                    "      {} skipped, unsupported by {}: {}",
-                    "·".dimmed(),
-                    target.display_name(),
-                    skipped.join(", ").dimmed()
-                );
+                    .extend(bundle.permissions.ask.clone());
             }
         }
 
+        if !tools.is_empty() && caps.mcp {
+            installer.install_mcp(&tools)?;
+            lines.push(format!(
+                "{} {}",
+                ui::good("✓"),
+                plural(tools.len(), "MCP server")
+            ));
+        }
+
         // Remove what the previous sync contributed, then apply the current
-        // set, so a shared settings.json never accumulates duplicates.
+        // set, so a shared settings file never accumulates duplicates.
         let previous = previous_contribution(existing.as_ref(), *target);
         if !contribution.is_empty() || !previous.is_empty() {
             installer.apply_settings(&contribution, &previous)?;
+            if !contribution.hooks.is_empty() {
+                lines.push(format!(
+                    "{} {}",
+                    ui::good("✓"),
+                    plural(contribution.hooks.len(), "hook")
+                ));
+            }
             let rules = contribution.permissions.allow.len()
                 + contribution.permissions.deny.len()
                 + contribution.permissions.ask.len();
             if rules > 0 {
-                println!("    {} {} permission rule(s)", "✓".green(), rules);
-            }
-            if !contribution.hooks.is_empty() {
-                println!("    {} {} hook(s)", "✓".green(), contribution.hooks.len());
+                lines.push(format!(
+                    "{} {}",
+                    ui::good("✓"),
+                    plural(rules, "permission rule")
+                ));
             }
         }
+
+        // Anything this target cannot take is named, never silently dropped.
+        let skipped: Vec<String> = bundles
+            .iter()
+            .flat_map(|(_, p)| caps.unsupported(&p.manifest))
+            .collect();
+        if !skipped.is_empty() {
+            lines.push(ui::dim(&format!(
+                "·  skipped, unsupported: {}",
+                skipped.join(", ")
+            )));
+        }
+
+        ui::success(&format!(
+            "{}   {}\n{}",
+            ui::bold(target.display_name()),
+            ui::dim(&installer.location()),
+            lines.join("\n")
+        ));
 
         for (bundle_name, _) in &bundles {
             if let Some(locked) = resolved_lock
@@ -478,20 +612,6 @@ pub async fn execute(check: bool, update: bool) -> Result<()> {
                 }
             }
         }
-
-        if !tools.is_empty() {
-            if caps.mcp {
-                installer.install_mcp(&tools)?;
-                println!("    {} {} MCP server(s)", "✓".green(), tools.len());
-            } else {
-                println!(
-                    "    {} {} MCP server(s) skipped — unsupported by {}",
-                    "·".dimmed(),
-                    tools.len(),
-                    target.display_name()
-                );
-            }
-        }
     }
 
     // ---- write the lock ---------------------------------------------------
@@ -502,17 +622,46 @@ pub async fn execute(check: bool, update: bool) -> Result<()> {
 
     resolved_lock.save(&lock_path)?;
 
-    println!();
-    ui::print_success("In sync.");
-    if changed {
-        println!(
-            "  {} {} updated — commit it so your team resolves the same commits.",
-            "→".cyan(),
-            crate::core::lockfile::LOCKFILE.cyan().bold()
-        );
-    }
+    ui::outro(&if changed {
+        format!(
+            "In sync {} {} updated — commit it",
+            ui::dim("·"),
+            ui::accent(crate::core::lockfile::LOCKFILE)
+        )
+    } else {
+        format!("In sync {} no changes", ui::dim("·"))
+    });
 
     Ok(())
+}
+
+/// A pinned commit is immutable, so identical bytes are guaranteed. A mismatch
+/// means the lock and the source disagree about history.
+fn verify_pin(
+    previous_digest: Option<&str>,
+    plan: &Plan,
+    current_digest: &str,
+    resolved: &str,
+) -> Result<()> {
+    if plan.pinned.is_none() {
+        return Ok(());
+    }
+    let Some(previous) = previous_digest else {
+        return Ok(());
+    };
+    if previous == current_digest {
+        return Ok(());
+    }
+
+    ui::outro_cancel("Integrity check failed");
+    anyhow::bail!(
+        "'{}' is pinned to {} in {}, but its contents no longer match.\n\
+         The source may have been rewritten. Inspect it, then run \
+         `agentpm sync --update` if the change is expected.",
+        plan.name,
+        &resolved[..12.min(resolved.len())],
+        crate::core::lockfile::LOCKFILE
+    )
 }
 
 /// Rebuild what a previous sync wrote into a target's settings.
@@ -559,22 +708,4 @@ fn previous_contribution(lock: Option<&Lockfile>, target: Target) -> SettingsCon
     }
 
     contribution
-}
-
-/// Targets a manifest declares, for `agentpm init` reporting.
-pub fn declared_targets(manifest: &Manifest) -> Vec<Target> {
-    manifest
-        .targets
-        .resolve()
-        .map(|(t, _)| t)
-        .unwrap_or_else(|_| Target::all().to_vec())
-}
-
-/// Scope a manifest declares.
-pub fn declared_scope(manifest: &Manifest) -> Scope {
-    manifest
-        .targets
-        .resolve()
-        .map(|(_, s)| s)
-        .unwrap_or(Scope::Project)
 }

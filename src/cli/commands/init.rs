@@ -1,137 +1,135 @@
-//! `agentpm init` — detect installed agents and write agentpm configuration.
+//! `agentpm init` — detect installed agents and scaffold the project manifest.
+//!
+//! Interactive on a terminal: detected agents are pre-selected, the scope is a
+//! choice, and the manifest is written from what you pick. Piped or in CI it
+//! takes the detected agents at project scope without prompting, so the command
+//! stays scriptable.
 
 use anyhow::Result;
-use colored::Colorize;
 
 use crate::core::config::Config;
-use crate::core::manifest::{Manifest, MANIFEST_FILE};
+use crate::core::manifest::{Manifest, Targets, MANIFEST_FILE};
 use crate::installers::Target;
 use crate::utils::paths::{self, Scope};
 use crate::utils::ui;
 
-pub async fn execute() -> Result<()> {
-    ui::print_header("agentpm Initialization");
-
-    println!("{} Detecting agents...\n", "→".cyan());
-
-    let mut detected: Vec<Target> = Vec::new();
-
-    for target in Target::all() {
-        let (found, location) = match target {
-            Target::Claude => (
-                paths::claude_detected(),
-                paths::claude_skills_dir(Scope::User).ok(),
-            ),
-            Target::Codex => (
-                paths::codex_detected(),
-                paths::codex_skills_dir(Scope::User).ok(),
-            ),
-        };
-
-        if found {
-            detected.push(target);
-        }
-
-        let mark = if found {
-            "✓".green().bold()
-        } else {
-            "✗".red().bold()
-        };
-        let status = if found {
-            "detected".green()
-        } else {
-            "not found".dimmed()
-        };
-
-        print!("  {} {} - {}", mark, target.display_name().bold(), status);
-        if found {
-            if let Some(path) = location {
-                print!(" ({})", path.display().to_string().dimmed());
-            }
-        }
-        println!();
+fn detect(target: Target) -> bool {
+    match target {
+        Target::Claude => paths::claude_detected(),
+        Target::Codex => paths::codex_detected(),
     }
+}
 
-    println!();
+fn user_skills_dir(target: Target) -> String {
+    let path = match target {
+        Target::Claude => paths::claude_skills_dir(Scope::User),
+        Target::Codex => paths::codex_skills_dir(Scope::User),
+    };
+    path.map(|p| p.display().to_string())
+        .unwrap_or_else(|_| "unresolved".to_string())
+}
+
+pub async fn execute() -> Result<()> {
+    ui::intro("agentpm init");
+
+    let detected: Vec<Target> = Target::all().into_iter().filter(|t| detect(*t)).collect();
+
+    let report = Target::all()
+        .iter()
+        .map(|t| {
+            if detected.contains(t) {
+                format!(
+                    "{} {}  {}",
+                    ui::good("✓"),
+                    ui::bold(t.display_name()),
+                    ui::dim(&user_skills_dir(*t))
+                )
+            } else {
+                ui::dim(&format!("· {}  not found", t.display_name()))
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    ui::step(&format!("Detected agents\n{}", report));
 
     if detected.is_empty() {
-        ui::print_warning("No supported agent detected.");
-        println!(
-            "  {} agentpm targets Claude Code and Codex. Install one, then re-run {}.",
-            "→".cyan(),
-            "agentpm init".cyan().bold()
+        ui::warning("No supported agent found on this machine");
+        ui::note(
+            "agentpm targets Claude Code and Codex",
+            "Install one, then run agentpm init again.\nYou can still create a manifest now and sync later.",
         );
     }
 
-    // Preserve an existing configuration. Re-running init previously reset a
-    // customized registry URL back to the default.
-    let config_path = paths::agentpm_config_path()?;
-    let existed = config_path.exists();
+    // Choose targets and scope. Non-interactive runs take the detected set.
+    let (chosen, scope) = if ui::is_rich() {
+        let selected = ui::select_targets(&detected)?;
+        if selected.is_empty() {
+            ui::outro_cancel("No targets selected — nothing written");
+            return Ok(());
+        }
+        let scope = ui::select_scope()?;
+        (selected, scope)
+    } else {
+        let fallback = if detected.is_empty() {
+            Target::all().to_vec()
+        } else {
+            detected.clone()
+        };
+        (fallback, Scope::Project)
+    };
 
-    let mut config = Config::load_or_default()?;
-    if let Some(first) = detected.first() {
-        config.default_target = first.slug().to_string();
+    // The project manifest is the file a team commits, so never overwrite one.
+    let manifest_path = paths::project_root()?.join(MANIFEST_FILE);
+    if manifest_path.exists() {
+        ui::info(&format!(
+            "{} already exists — left untouched",
+            ui::accent(MANIFEST_FILE)
+        ));
+    } else {
+        let manifest = Manifest {
+            targets: Targets {
+                agents: chosen.iter().map(|t| t.slug().to_string()).collect(),
+                scope: scope.display_name().to_string(),
+            },
+            ..Manifest::starter(&chosen)
+        };
+        manifest.save(&manifest_path)?;
+        ui::success(&format!("Created {}", ui::accent(MANIFEST_FILE)));
     }
 
+    // Preserve an existing configuration; re-running init previously reset a
+    // customized registry URL back to the default.
+    let config_path = paths::agentpm_config_path()?;
+    let mut config = Config::load_or_default()?;
+    if let Some(first) = chosen.first() {
+        config.default_target = first.slug().to_string();
+    }
     if let Some(parent) = config_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
     config.save(&config_path)?;
 
-    println!(
-        "{} {} {}",
-        "✓".green().bold(),
-        if existed { "Updated" } else { "Created" },
-        config_path.display().to_string().cyan()
+    ui::note(
+        "Next",
+        &format!(
+            "1. Add skills under [skills] in {}\n\
+             2. Run agentpm sync to install them\n\
+             3. Commit {} and agentpm.lock so your team resolves the same commits",
+            MANIFEST_FILE, MANIFEST_FILE
+        ),
     );
-    println!(
-        "{} Default target: {}",
-        "✓".green().bold(),
-        config.default_target.cyan().bold()
-    );
-    if existed {
-        println!(
-            "  {} Existing registry URL kept: {}",
-            "·".dimmed(),
-            config.registry_url.dimmed()
-        );
-    }
 
-    // Scaffold the project manifest. This is the file a team commits, so init
-    // must never overwrite one that already exists.
-    let manifest_path = paths::project_root()?.join(MANIFEST_FILE);
-    if manifest_path.exists() {
-        println!(
-            "{} {} already exists — left untouched",
-            "·".dimmed(),
-            manifest_path.display().to_string().dimmed()
-        );
-    } else {
-        Manifest::starter(&detected).save(&manifest_path)?;
-        println!(
-            "{} Created {}",
-            "✓".green().bold(),
-            manifest_path.display().to_string().cyan()
-        );
-    }
-
-    println!();
-    ui::print_success("agentpm initialized.");
-    println!("\n  Next:");
-    println!(
-        "    1. Add skills under {} in {}",
-        "[skills]".bold(),
-        MANIFEST_FILE.cyan()
-    );
-    println!(
-        "    2. Run {} to install them",
-        "agentpm sync".cyan().bold()
-    );
-    println!(
-        "    3. Commit {} and {} so your team resolves the same commits",
-        MANIFEST_FILE.cyan(),
-        crate::core::lockfile::LOCKFILE.cyan()
-    );
+    ui::outro(&format!(
+        "Ready {} {} {} {} scope",
+        ui::dim("·"),
+        chosen
+            .iter()
+            .map(|t| t.display_name())
+            .collect::<Vec<_>>()
+            .join(", "),
+        ui::dim("·"),
+        scope.display_name()
+    ));
 
     Ok(())
 }

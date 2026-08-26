@@ -37,7 +37,7 @@ impl SettingsContribution {
 }
 
 /// Target editor for installation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Target {
     Claude,
     Codex,

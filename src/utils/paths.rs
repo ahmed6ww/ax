@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 ///
 /// `User` applies across every project; `Project` is committed with the repo
 /// and is the scope the team-sync workflow builds on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Scope {
     User,
     Project,
@@ -227,6 +227,18 @@ pub fn is_contained(base: &Path, child: &Path) -> bool {
     }
     let _ = base;
     true
+}
+
+/// Render a path relative to the working directory when it sits below it.
+///
+/// A project-scoped install prints `.claude/skills` rather than an absolute
+/// path that pushes the useful part of the line off screen.
+pub fn display_relative(path: &Path) -> String {
+    std::env::current_dir()
+        .ok()
+        .and_then(|cwd| path.strip_prefix(&cwd).ok().map(|p| p.to_path_buf()))
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|| path.display().to_string())
 }
 
 #[cfg(test)]
