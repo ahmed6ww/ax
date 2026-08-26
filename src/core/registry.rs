@@ -111,10 +111,7 @@ impl Registry {
             anyhow::bail!("Skill '{}' not found", name);
         }
 
-        let skill_md = response
-            .text()
-            .await
-            .context("Failed to read skill file")?;
+        let skill_md = response.text().await.context("Failed to read skill file")?;
 
         // Parse SKILL.md (YAML frontmatter + markdown body)
         let mut skill = Self::parse_skill_md(name, &skill_md)?;
@@ -126,7 +123,10 @@ impl Registry {
         Ok(AgentConfig {
             name: name.to_string(),
             version: "1.0.0".to_string(),
-            description: skill.description.clone().unwrap_or_else(|| format!("Skill: {}", name)),
+            description: skill
+                .description
+                .clone()
+                .unwrap_or_else(|| format!("Skill: {}", name)),
             author: "community".to_string(),
             identity: Identity {
                 model: None,
@@ -178,11 +178,10 @@ impl Registry {
         };
 
         // Parse frontmatter as YAML
-        let mut skill: Skill = serde_yaml::from_str(frontmatter)
-            .unwrap_or_else(|_| Skill {
-                name: name.to_string(),
-                ..Default::default()
-            });
+        let mut skill: Skill = serde_yaml::from_str(frontmatter).unwrap_or_else(|_| Skill {
+            name: name.to_string(),
+            ..Default::default()
+        });
 
         // Set the content from the body
         skill.content = body.to_string();
@@ -201,7 +200,9 @@ impl Registry {
             AgentInfo {
                 name: "rust-architect".to_string(),
                 version: "1.0.0".to_string(),
-                description: "Senior Rust Systems Engineer optimized for Tokio & zero-cost abstractions".to_string(),
+                description:
+                    "Senior Rust Systems Engineer optimized for Tokio & zero-cost abstractions"
+                        .to_string(),
                 author: "ahmed6ww".to_string(),
             },
             AgentInfo {
@@ -463,13 +464,16 @@ export async function createUser(formData: FormData) {
 - Test behavior, not implementation
 - Use describe blocks for organization
 - Mock external dependencies only
-- Keep tests focused and fast"#.to_string(),
+- Keep tests focused and fast"#
+                    .to_string(),
             },
-            skills: vec![
-                Skill {
-                    name: "playwright-setup".to_string(),
-                    description: Some("Playwright configuration and Page Object Model patterns for E2E testing".to_string()),
-                    content: r#"# Playwright Configuration
+            skills: vec![Skill {
+                name: "playwright-setup".to_string(),
+                description: Some(
+                    "Playwright configuration and Page Object Model patterns for E2E testing"
+                        .to_string(),
+                ),
+                content: r#"# Playwright Configuration
 
 ## playwright.config.ts
 ```typescript
@@ -498,23 +502,24 @@ export class LoginPage {
     await this.page.getByRole('button', { name: 'Sign in' }).click();
   }
 }
-```"#.to_string(),
-                    ..Default::default()
+```"#
+                    .to_string(),
+                ..Default::default()
+            }],
+            mcp: vec![McpTool {
+                name: "context7".to_string(),
+                command: "npx".to_string(),
+                args: vec!["-y".to_string(), "@upstash/context7-mcp".to_string()],
+                env: {
+                    let mut env = HashMap::new();
+                    env.insert(
+                        "CONTEXT7_API_KEY".to_string(),
+                        "${CONTEXT7_API_KEY}".to_string(),
+                    );
+                    env
                 },
-            ],
-            mcp: vec![
-                McpTool {
-                    name: "context7".to_string(),
-                    command: "npx".to_string(),
-                    args: vec!["-y".to_string(), "@upstash/context7-mcp".to_string()],
-                    env: {
-                        let mut env = HashMap::new();
-                        env.insert("CONTEXT7_API_KEY".to_string(), "${CONTEXT7_API_KEY}".to_string());
-                        env
-                    },
-                    setup_url: Some("https://context7.com/dashboard".to_string()),
-                },
-            ],
+                setup_url: Some("https://context7.com/dashboard".to_string()),
+            }],
         }
     }
 }

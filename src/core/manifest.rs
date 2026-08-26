@@ -189,8 +189,7 @@ impl Manifest {
     }
 
     pub fn save(&self, path: &Path) -> Result<()> {
-        let rendered = toml::to_string_pretty(self)
-            .context("Failed to serialize the manifest")?;
+        let rendered = toml::to_string_pretty(self).context("Failed to serialize the manifest")?;
         crate::installers::common::write_atomic(path, rendered.as_bytes())
     }
 
@@ -262,9 +261,11 @@ env = { CONTEXT7_API_KEY = "${CONTEXT7_API_KEY}" }
 
     #[test]
     fn rejects_an_unknown_agent() {
-        let m: Manifest = toml::from_str(r#"[targets]
+        let m: Manifest = toml::from_str(
+            r#"[targets]
 agents = ["cursor"]
-"#)
+"#,
+        )
         .unwrap();
         let err = m.targets.resolve().unwrap_err().to_string();
         assert!(err.contains("cursor"), "{}", err);

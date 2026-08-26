@@ -94,7 +94,10 @@ impl GitHubSource {
                     .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
         };
         if !valid(owner) || !valid(repo) {
-            anyhow::bail!("'{}' contains characters not valid in a GitHub path", source);
+            anyhow::bail!(
+                "'{}' contains characters not valid in a GitHub path",
+                source
+            );
         }
 
         Ok(Self {
@@ -178,7 +181,8 @@ impl SourceClient {
             return Ok(response);
         }
 
-        if status == reqwest::StatusCode::FORBIDDEN || status == reqwest::StatusCode::TOO_MANY_REQUESTS
+        if status == reqwest::StatusCode::FORBIDDEN
+            || status == reqwest::StatusCode::TOO_MANY_REQUESTS
         {
             let remaining = response
                 .headers()
@@ -239,7 +243,11 @@ impl SourceClient {
         );
 
         let response = self.api(&url).send().await.with_context(|| {
-            format!("Failed to list files in {} at {}", source.slug(), &commit[..7.min(commit.len())])
+            format!(
+                "Failed to list files in {} at {}",
+                source.slug(),
+                &commit[..7.min(commit.len())]
+            )
         })?;
         let response = self
             .check(response, &format!("listing {}", source.slug()))
@@ -325,7 +333,9 @@ impl SourceClient {
             .send()
             .await
             .with_context(|| format!("Failed to download {}", full_path))?;
-        let response = self.check(response, &format!("downloading {}", full_path)).await?;
+        let response = self
+            .check(response, &format!("downloading {}", full_path))
+            .await?;
 
         let bytes = response
             .bytes()
@@ -356,8 +366,8 @@ impl SourceClient {
         let prefix = path.trim_matches('/');
 
         let commit_ref = commit.as_str();
-        let mut files: Vec<FetchedFile> = futures::stream::iter(listing.into_iter().map(
-            |(relative, _)| async move {
+        let mut files: Vec<FetchedFile> =
+            futures::stream::iter(listing.into_iter().map(|(relative, _)| async move {
                 let full = if prefix.is_empty() {
                     relative.clone()
                 } else {
@@ -368,11 +378,10 @@ impl SourceClient {
                     path: relative,
                     bytes,
                 })
-            },
-        ))
-        .buffer_unordered(FETCH_CONCURRENCY)
-        .try_collect()
-        .await?;
+            }))
+            .buffer_unordered(FETCH_CONCURRENCY)
+            .try_collect()
+            .await?;
 
         files.sort_by(|a, b| a.path.cmp(&b.path));
 
@@ -421,7 +430,14 @@ mod tests {
 
     #[test]
     fn rejects_malformed_sources() {
-        for input in ["", "owner", "owner/repo/extra", "owner/", "/repo", "own er/repo"] {
+        for input in [
+            "",
+            "owner",
+            "owner/repo/extra",
+            "owner/",
+            "/repo",
+            "own er/repo",
+        ] {
             assert!(GitHubSource::parse(input).is_err(), "accepted {:?}", input);
         }
     }
@@ -435,14 +451,20 @@ mod tests {
 
     #[test]
     fn strips_directory_prefixes() {
-        assert_eq!(strip_dir_prefix("skills/nextjs/SKILL.md", "skills/nextjs"), Some("SKILL.md"));
+        assert_eq!(
+            strip_dir_prefix("skills/nextjs/SKILL.md", "skills/nextjs"),
+            Some("SKILL.md")
+        );
         assert_eq!(
             strip_dir_prefix("skills/nextjs/scripts/a.py", "skills/nextjs"),
             Some("scripts/a.py")
         );
         assert_eq!(strip_dir_prefix("SKILL.md", ""), Some("SKILL.md"));
         // A sibling directory that merely shares a name prefix must not match.
-        assert_eq!(strip_dir_prefix("skills/nextjs-old/SKILL.md", "skills/nextjs"), None);
+        assert_eq!(
+            strip_dir_prefix("skills/nextjs-old/SKILL.md", "skills/nextjs"),
+            None
+        );
         assert_eq!(strip_dir_prefix("other/SKILL.md", "skills/nextjs"), None);
     }
 

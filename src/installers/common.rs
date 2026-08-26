@@ -116,8 +116,7 @@ fn write_inner(path: &Path, contents: &[u8], backup: bool) -> Result<()> {
     let parent = path
         .parent()
         .context("Refusing to write to a path with no parent directory")?;
-    fs::create_dir_all(parent)
-        .with_context(|| format!("Failed to create {}", parent.display()))?;
+    fs::create_dir_all(parent).with_context(|| format!("Failed to create {}", parent.display()))?;
 
     let name = path
         .file_name()
@@ -156,9 +155,8 @@ fn write_inner(path: &Path, contents: &[u8], backup: bool) -> Result<()> {
         fs::remove_file(path).ok();
     }
 
-    fs::rename(&tmp, path).with_context(|| {
-        format!("Failed to move staged file into {}", path.display())
-    })?;
+    fs::rename(&tmp, path)
+        .with_context(|| format!("Failed to move staged file into {}", path.display()))?;
 
     Ok(())
 }

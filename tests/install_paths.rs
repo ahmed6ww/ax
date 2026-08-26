@@ -103,7 +103,9 @@ fn claude_project_scope_matches_documented_layout() {
         // Documented: .claude/agents/<name>.md
         let subagent = project.join(".claude/agents/rust-architect.md");
         assert!(subagent.is_file(), "missing {}", subagent.display());
-        assert!(fs::read_to_string(&subagent).unwrap().contains("model: sonnet"));
+        assert!(fs::read_to_string(&subagent)
+            .unwrap()
+            .contains("model: sonnet"));
 
         // Documented: .mcp.json at the project root, shared via version control
         let mcp = project.join(".mcp.json");
@@ -122,8 +124,13 @@ fn claude_user_scope_uses_dot_claude_in_home() {
         installer.install_skills(&agent).unwrap();
 
         // ~/.claude/skills on every platform — never Application Support or %APPDATA%.
-        assert!(home.join(".claude/skills/tokio-patterns/SKILL.md").is_file());
-        assert!(!home.join("Library").exists(), "wrote to a Desktop-style path");
+        assert!(home
+            .join(".claude/skills/tokio-patterns/SKILL.md")
+            .is_file());
+        assert!(
+            !home.join("Library").exists(),
+            "wrote to a Desktop-style path"
+        );
         assert!(!home.join(".claude/skills/synced").exists());
     });
 }
@@ -137,7 +144,9 @@ fn codex_writes_to_dot_agents_not_dot_codex() {
         installer.install_tools(&agent).unwrap();
 
         // Documented: .agents/skills/<name>/SKILL.md
-        assert!(project.join(".agents/skills/tokio-patterns/SKILL.md").is_file());
+        assert!(project
+            .join(".agents/skills/tokio-patterns/SKILL.md")
+            .is_file());
 
         // Codex does not scan ~/.codex/skills — nothing may land there.
         assert!(
@@ -148,13 +157,18 @@ fn codex_writes_to_dot_agents_not_dot_codex() {
         // Codex has no subagent concept, so the identity ships as a skill.
         let identity = project.join(".agents/skills/rust-architect-identity/SKILL.md");
         assert!(identity.is_file(), "identity was dropped");
-        assert!(fs::read_to_string(&identity).unwrap().contains("You are a Rust expert."));
+        assert!(fs::read_to_string(&identity)
+            .unwrap()
+            .contains("You are a Rust expert."));
 
         // MCP still belongs in ~/.codex/config.toml.
         let cfg = home.join(".codex/config.toml");
         assert!(cfg.is_file(), "missing {}", cfg.display());
         let doc: toml::Table = fs::read_to_string(&cfg).unwrap().parse().unwrap();
-        assert_eq!(doc["mcp_servers"]["context7"]["command"].as_str(), Some("npx"));
+        assert_eq!(
+            doc["mcp_servers"]["context7"]["command"].as_str(),
+            Some("npx")
+        );
     });
 }
 
@@ -172,7 +186,10 @@ fn codex_config_survives_a_hostile_command_string() {
         let cfg = home.join(".codex/config.toml");
         let doc: toml::Table = fs::read_to_string(&cfg).unwrap().parse().unwrap();
         let servers = doc["mcp_servers"].as_table().unwrap();
-        assert!(!servers.contains_key("injected"), "TOML injection succeeded");
+        assert!(
+            !servers.contains_key("injected"),
+            "TOML injection succeeded"
+        );
         assert_eq!(servers.len(), 1);
     });
 }

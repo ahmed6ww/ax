@@ -18,8 +18,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use super::common::{
-    copy_skill_subdirectories, render_skill_md, skill_dir, write_atomic,
-    write_atomic_preserving,
+    copy_skill_subdirectories, render_skill_md, skill_dir, write_atomic, write_atomic_preserving,
 };
 use super::{Capabilities, Installer};
 use crate::core::agent::{AgentConfig, Skill};
@@ -161,10 +160,7 @@ impl Installer for CodexInstaller {
                 let mut keys: Vec<_> = tool.env.keys().collect();
                 keys.sort();
                 for key in keys {
-                    env.insert(
-                        key.clone(),
-                        toml::Value::String(tool.env[key].clone()),
-                    );
+                    env.insert(key.clone(), toml::Value::String(tool.env[key].clone()));
                 }
                 entry.insert("env".to_string(), toml::Value::Table(env));
             }
@@ -172,8 +168,8 @@ impl Installer for CodexInstaller {
             servers.insert(tool.name.clone(), toml::Value::Table(entry));
         }
 
-        let rendered = toml::to_string_pretty(&doc)
-            .context("Failed to serialize Codex configuration")?;
+        let rendered =
+            toml::to_string_pretty(&doc).context("Failed to serialize Codex configuration")?;
         write_atomic_preserving(&config_path, rendered.as_bytes())
     }
 

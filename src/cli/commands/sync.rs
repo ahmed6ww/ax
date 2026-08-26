@@ -12,7 +12,7 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
 
-use crate::core::lockfile::{tree_digest, digest, LockedMcp, LockedSkill, Lockfile};
+use crate::core::lockfile::{digest, tree_digest, LockedMcp, LockedSkill, Lockfile};
 use crate::core::manifest::Manifest;
 use crate::core::source::{GitHubSource, SourceClient};
 use crate::installers::{get_installer, Target};
@@ -33,15 +33,16 @@ pub async fn execute(check: bool, update: bool) -> Result<()> {
             crate::core::manifest::MANIFEST_FILE
         )
     })?;
-    let project_root = manifest_path
-        .parent()
-        .unwrap_or(&cwd)
-        .to_path_buf();
+    let project_root = manifest_path.parent().unwrap_or(&cwd).to_path_buf();
 
     let manifest = Manifest::load(&manifest_path)?;
     let (targets, scope) = manifest.targets.resolve()?;
 
-    ui::print_header(if check { "Checking agent setup" } else { "Syncing agent setup" });
+    ui::print_header(if check {
+        "Checking agent setup"
+    } else {
+        "Syncing agent setup"
+    });
     println!(
         "  {} {}",
         "manifest".dimmed(),
@@ -169,7 +170,12 @@ pub async fn execute(check: bool, update: bool) -> Result<()> {
     for tool in &tools {
         // Environment values are excluded from the digest: they hold API keys,
         // and the lockfile is committed.
-        let material = format!("{}\u{0}{}\u{0}{}", tool.name, tool.command, tool.args.join("\u{0}"));
+        let material = format!(
+            "{}\u{0}{}\u{0}{}",
+            tool.name,
+            tool.command,
+            tool.args.join("\u{0}")
+        );
         resolved_lock.mcp.push(LockedMcp {
             name: tool.name.clone(),
             command: tool.command.clone(),
@@ -189,7 +195,10 @@ pub async fn execute(check: bool, update: bool) -> Result<()> {
             return Ok(());
         }
 
-        ui::print_error(&format!("{} change(s) not reflected in the lockfile:", drift.len()));
+        ui::print_error(&format!(
+            "{} change(s) not reflected in the lockfile:",
+            drift.len()
+        ));
         println!();
         for item in &drift {
             println!("    {}", item);
@@ -218,9 +227,9 @@ pub async fn execute(check: bool, update: bool) -> Result<()> {
         );
 
         for (name, files) in &installed {
-            installer
-                .install_files(name, files)
-                .with_context(|| format!("Failed to install '{}' for {}", name, target.display_name()))?;
+            installer.install_files(name, files).with_context(|| {
+                format!("Failed to install '{}' for {}", name, target.display_name())
+            })?;
         }
         println!("    {} {} skill(s)", "✓".green(), installed.len());
 

@@ -54,7 +54,11 @@ pub fn prompt_for_api_keys(mut agent: AgentConfig) -> Result<AgentConfig> {
             let entered = entered.trim();
 
             if entered.is_empty() {
-                println!("  {} Left as ${{{}}} — export it in your shell", "·".dimmed(), key);
+                println!(
+                    "  {} Left as ${{{}}} — export it in your shell",
+                    "·".dimmed(),
+                    key
+                );
             } else {
                 tool.env.insert(key.clone(), entered.to_string());
                 println!("  {} {} set", "✓".green(), key);

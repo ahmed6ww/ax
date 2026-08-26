@@ -123,7 +123,10 @@ pub async fn execute() -> Result<()> {
         "[skills]".bold(),
         MANIFEST_FILE.cyan()
     );
-    println!("    2. Run {} to install them", "agentpm sync".cyan().bold());
+    println!(
+        "    2. Run {} to install them",
+        "agentpm sync".cyan().bold()
+    );
     println!(
         "    3. Commit {} and {} so your team resolves the same commits",
         MANIFEST_FILE.cyan(),

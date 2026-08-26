@@ -44,11 +44,9 @@ pub fn create_spinner(message: &str) -> ProgressBar {
 pub fn create_progress_bar(len: u64, message: &str) -> ProgressBar {
     let pb = ProgressBar::new(len);
     pb.set_style(
-        ProgressStyle::with_template(
-            "  {spinner:.cyan} {msg} [{bar:30.cyan/dim}] {pos}/{len}",
-        )
-        .unwrap()
-        .progress_chars("━━╺"),
+        ProgressStyle::with_template("  {spinner:.cyan} {msg} [{bar:30.cyan/dim}] {pos}/{len}")
+            .unwrap()
+            .progress_chars("━━╺"),
     );
     pb.set_message(message.to_string());
     pb

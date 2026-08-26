@@ -17,8 +17,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use super::common::{
-    copy_skill_subdirectories, render_skill_md, skill_dir, write_atomic,
-    write_atomic_preserving,
+    copy_skill_subdirectories, render_skill_md, skill_dir, write_atomic, write_atomic_preserving,
 };
 use super::{Capabilities, Installer};
 use crate::core::agent::AgentConfig;
@@ -93,8 +92,8 @@ impl Installer for ClaudeInstaller {
 
     fn install_identity(&self, agent: &AgentConfig) -> Result<()> {
         let agents_dir = self.agents_dir()?;
-        let file = skill_dir(&agents_dir, &format!("{}.md", agent.name))
-            .context("Invalid agent name")?;
+        let file =
+            skill_dir(&agents_dir, &format!("{}.md", agent.name)).context("Invalid agent name")?;
         write_atomic(&file, Self::render_subagent(agent)?.as_bytes())
     }
 
@@ -144,10 +143,7 @@ impl Installer for ClaudeInstaller {
         };
 
         if !config.is_object() {
-            anyhow::bail!(
-                "{} does not contain a JSON object",
-                config_path.display()
-            );
+            anyhow::bail!("{} does not contain a JSON object", config_path.display());
         }
 
         let servers = config

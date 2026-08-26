@@ -75,7 +75,6 @@ pub async fn execute() -> Result<()> {
     Ok(())
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::truncate;
