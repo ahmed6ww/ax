@@ -16,6 +16,7 @@ use crate::core::bundle::BundleManifest;
 use crate::core::lockfile::{digest, tree_digest, LockedBundle, LockedMcp, LockedSkill, Lockfile};
 use crate::core::manifest::{Manifest, SkillSpec};
 use crate::core::source::{GitHubSource, ResolvedSkill, SourceClient};
+use crate::core::trust::Request;
 use crate::installers::{get_installer, SettingsContribution, Target};
 use crate::utils::ui;
 
@@ -108,17 +109,17 @@ impl Plan {
     }
 }
 
-pub async fn execute(check: bool, update: bool) -> Result<()> {
-    run(check, update, true).await
+pub async fn execute(check: bool, update: bool, assume_yes: bool) -> Result<()> {
+    run(check, update, true, assume_yes).await
 }
 
 /// Reconcile as a continuation of another command, without opening a second
 /// rail. `install` and `uninstall` announce themselves and then hand over.
-pub(crate) async fn reconcile() -> Result<()> {
-    run(false, false, false).await
+pub(crate) async fn reconcile(assume_yes: bool) -> Result<()> {
+    run(false, false, false, assume_yes).await
 }
 
-async fn run(check: bool, update: bool, announce: bool) -> Result<()> {
+async fn run(check: bool, update: bool, announce: bool, assume_yes: bool) -> Result<()> {
     let cwd = std::env::current_dir()?;
     let manifest_path = Manifest::find(&cwd).with_context(|| {
         format!(
@@ -501,6 +502,46 @@ async fn run(check: bool, update: bool, announce: bool) -> Result<()> {
             crate::core::lockfile::LOCKFILE
         ));
         std::process::exit(DRIFT_EXIT_CODE);
+    }
+
+    // ---- consent ----------------------------------------------------------
+    //
+    // Everything below this point writes something that will execute. Collect
+    // it, show whatever has not been approved before, and stop if the answer
+    // is no.
+    let mut requests: Vec<Request> = tools
+        .iter()
+        .map(|t| {
+            let origin = bundles
+                .iter()
+                .find(|(_, p)| p.manifest.mcp.contains_key(&t.name))
+                .map(|(name, p)| format!("bundle {} ({})", name, p.manifest.name))
+                .unwrap_or_else(|| crate::core::manifest::MANIFEST_FILE.to_string());
+            Request::mcp(&t.name, &t.command, &t.args, &origin)
+        })
+        .collect();
+
+    for (bundle_name, payload) in &bundles {
+        for hook in &payload.manifest.hooks {
+            let body = payload.file(&hook.command).cloned().unwrap_or_default();
+            requests.push(Request::hook(
+                &hook.command,
+                &hook.event,
+                hook.matcher.as_deref(),
+                &body,
+                &format!("bundle {}", bundle_name),
+            ));
+        }
+    }
+
+    if !requests.is_empty() {
+        match super::trust_gate::review(&requests, assume_yes)? {
+            super::trust_gate::Decision::Proceed => {}
+            super::trust_gate::Decision::Declined => {
+                ui::outro_cancel("Declined — nothing installed");
+                return Ok(());
+            }
+        }
     }
 
     // ---- prune what the manifest no longer declares -----------------------

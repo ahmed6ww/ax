@@ -26,6 +26,13 @@ pub enum Commands {
     /// Show what this project has installed
     List,
 
+    /// Show what is authorised to run on this machine
+    Audit {
+        /// Withdraw approval for a name, so agentpm asks again
+        #[arg(long, value_name = "NAME")]
+        revoke: Option<String>,
+    },
+
     /// Add a skill or bundle to agentpm.toml and sync
     Install {
         /// Source as owner/repo, optionally with #path/inside/repo
@@ -38,6 +45,10 @@ pub enum Commands {
         /// Name to install under. Defaults to the last path segment.
         #[arg(long)]
         name: Option<String>,
+
+        /// Approve anything that will run on your machine without prompting
+        #[arg(short = 'y', long, default_value = "false")]
+        yes: bool,
     },
 
     /// Install everything agentpm.toml declares, for the whole team
@@ -49,6 +60,10 @@ pub enum Commands {
         /// Re-resolve every source to its latest commit and rewrite the lockfile
         #[arg(long, default_value = "false")]
         update: bool,
+
+        /// Approve anything that will run on your machine without prompting
+        #[arg(short = 'y', long, default_value = "false")]
+        yes: bool,
     },
 
     /// Remove a skill or bundle from agentpm.toml and sync

@@ -27,7 +27,12 @@ fn derive_name(source: &GitHubSource, path: Option<&str>) -> String {
         .to_string()
 }
 
-pub async fn execute(spec: &str, rev: Option<String>, name_override: Option<String>) -> Result<()> {
+pub async fn execute(
+    spec: &str,
+    rev: Option<String>,
+    name_override: Option<String>,
+    assume_yes: bool,
+) -> Result<()> {
     ui::intro(&format!("agentpm install {}", spec));
 
     let (source_str, path) = split_source(spec);
@@ -83,7 +88,7 @@ pub async fn execute(spec: &str, rev: Option<String>, name_override: Option<Stri
 
     // Reconcile so the entry is actually on disk and in the lockfile. The
     // rail stays open: sync closes it.
-    super::sync::reconcile().await
+    super::sync::reconcile(assume_yes).await
 }
 
 #[cfg(test)]

@@ -316,6 +316,13 @@ pub fn secret(label: &str) -> anyhow::Result<String> {
     Ok(value)
 }
 
+/// Ask a yes/no question, defaulting to no.
+pub fn confirm(question: &str) -> anyhow::Result<bool> {
+    Ok(cliclack::confirm(question)
+        .initial_value(false)
+        .interact()?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

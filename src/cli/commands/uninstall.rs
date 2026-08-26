@@ -50,5 +50,5 @@ pub async fn execute(name: &str) -> Result<()> {
         ui::accent(MANIFEST_FILE)
     ));
     // sync prunes anything the manifest no longer declares and closes the rail.
-    super::sync::reconcile().await
+    super::sync::reconcile(false).await
 }

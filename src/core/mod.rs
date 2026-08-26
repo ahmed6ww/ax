@@ -6,3 +6,4 @@ pub mod config;
 pub mod lockfile;
 pub mod manifest;
 pub mod source;
+pub mod trust;

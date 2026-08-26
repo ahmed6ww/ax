@@ -12,11 +12,15 @@ async fn main() {
     let result = match cli.command {
         Commands::Init => agentpm_lib::cli::commands::init::execute().await,
         Commands::List => agentpm_lib::cli::commands::list::execute().await,
-        Commands::Install { source, rev, name } => {
-            agentpm_lib::cli::commands::install::execute(&source, rev, name).await
-        }
-        Commands::Sync { check, update } => {
-            agentpm_lib::cli::commands::sync::execute(check, update).await
+        Commands::Audit { revoke } => agentpm_lib::cli::commands::audit::execute(revoke).await,
+        Commands::Install {
+            source,
+            rev,
+            name,
+            yes,
+        } => agentpm_lib::cli::commands::install::execute(&source, rev, name, yes).await,
+        Commands::Sync { check, update, yes } => {
+            agentpm_lib::cli::commands::sync::execute(check, update, yes).await
         }
         Commands::Uninstall { agent } => {
             agentpm_lib::cli::commands::uninstall::execute(&agent).await
