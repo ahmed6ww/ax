@@ -18,20 +18,20 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact: ax-linux-x64
+            artifact: agentpm-linux-x64
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            artifact: ax-linux-arm64
+            artifact: agentpm-linux-arm64
             cross: true
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact: ax-macos-x64
+            artifact: agentpm-macos-x64
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact: ax-macos-arm64
+            artifact: agentpm-macos-arm64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact: ax-windows-x64.exe
+            artifact: agentpm-windows-x64.exe
 
     steps:
       - name: Checkout
@@ -57,12 +57,12 @@ jobs:
       - name: Prepare artifact (Unix)
         if: runner.os != 'Windows'
         run: |
-          cp target/${{ matrix.target }}/release/ax ${{ matrix.artifact }}
+          cp target/${{ matrix.target }}/release/agentpm ${{ matrix.artifact }}
           chmod +x ${{ matrix.artifact }}
 
       - name: Prepare artifact (Windows)
         if: runner.os == 'Windows'
-        run: cp target/${{ matrix.target }}/release/ax.exe ${{ matrix.artifact }}
+        run: cp target/${{ matrix.target }}/release/agentpm.exe ${{ matrix.artifact }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -90,11 +90,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/ax-linux-x64/ax-linux-x64
-            artifacts/ax-linux-arm64/ax-linux-arm64
-            artifacts/ax-macos-x64/ax-macos-x64
-            artifacts/ax-macos-arm64/ax-macos-arm64
-            artifacts/ax-windows-x64.exe/ax-windows-x64.exe
+            artifacts/agentpm-linux-x64/agentpm-linux-x64
+            artifacts/agentpm-linux-arm64/agentpm-linux-arm64
+            artifacts/agentpm-macos-x64/agentpm-macos-x64
+            artifacts/agentpm-macos-arm64/agentpm-macos-arm64
+            artifacts/agentpm-windows-x64.exe/agentpm-windows-x64.exe
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

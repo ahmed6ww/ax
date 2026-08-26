@@ -1,6 +1,6 @@
 //! Installer Module
 //!
-//! Adapter per target editor. AX targets Claude Code and Codex only: both speak
+//! Adapter per target editor. agentpm targets Claude Code and Codex only: both speak
 //! the Agent Skills standard, which lets them share one skill renderer and
 //! differ only in where files land and which surfaces they support.
 

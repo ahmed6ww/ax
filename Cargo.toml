@@ -1,21 +1,21 @@
 [package]
-name = "ax"
+name = "agentpm"
 version = "1.5.0"
 edition = "2021"
 authors = ["ahmed6ww"]
-description = "AX - The Agent Package Manager"
+description = "Keep your team running the same agent setup on Claude Code and Codex"
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/ahmed6ww/ax"
-keywords = ["ai", "agents", "cli", "claude", "cursor"]
+keywords = ["ai", "agents", "cli", "claude", "codex"]
 categories = ["command-line-utilities", "development-tools"]
 
 [[bin]]
-name = "ax"
+name = "agentpm"
 path = "src/main.rs"
 
 [lib]
-name = "ax_lib"
+name = "agentpm_lib"
 path = "src/lib.rs"
 
 [dependencies]
@@ -49,6 +49,7 @@ thiserror = "1.0"
 # Utilities
 which = "6.0"
 rpassword = "7.3"
+sha2 = "0.10"
 
 [dev-dependencies]
 tempfile = "3.10"

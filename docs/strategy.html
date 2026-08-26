@@ -288,9 +288,9 @@
       <div class="item">
         <div class="inum">1</div>
         <div>
-          <h4><code>ax.toml</code> + <code>ax.lock</code> + <code>ax sync</code><span class="tag moat">The moat</span></h4>
-          <p>Commit a manifest to the repo; every teammate runs one command and gets a byte-identical agent environment on both Claude Code and Codex. <code>ax sync --check</code> in CI fails the pull request when someone's setup has drifted.</p>
-<pre><i># ax.toml — committed to the repo</i>
+          <h4><code>agentpm.toml</code> + <code>agentpm.lock</code> + <code>agentpm sync</code><span class="tag moat">The moat</span></h4>
+          <p>Commit a manifest to the repo; every teammate runs one command and gets a byte-identical agent environment on both Claude Code and Codex. <code>agentpm sync --check</code> in CI fails the pull request when someone's setup has drifted.</p>
+<pre><i># agentpm.toml — committed to the repo</i>
 <b>[targets]</b>
 agents = ["claude-code", "codex"]
 scope  = "project"
@@ -313,7 +313,7 @@ pre-commit = "ahmed6ww/ax-agents#fmt-guard"</pre>
         <div class="inum">2</div>
         <div>
           <h4>Bundles — install an environment, not a file</h4>
-          <p>One <code>ax install</code> provisions skills, subagents, slash commands, hooks, MCP servers and tool permissions together, as a versioned unit. Emit a Claude Code plugin via <code>.claude-plugin/plugin.json</code> so you are riding Anthropic's native distribution mechanism instead of competing with it.</p>
+          <p>One <code>agentpm install</code> provisions skills, subagents, slash commands, hooks, MCP servers and tool permissions together, as a versioned unit. Emit a Claude Code plugin via <code>.claude-plugin/plugin.json</code> so you are riding Anthropic's native distribution mechanism instead of competing with it.</p>
           <p>This is the concrete payoff of going vertical: a competitor supporting 76 agents can never ship it, because 74 of those agents have no concept of a hook or a subagent.</p>
         </div>
       </div>
@@ -321,7 +321,7 @@ pre-commit = "ahmed6ww/ax-agents#fmt-guard"</pre>
       <div class="item">
         <div class="inum">3</div>
         <div>
-          <h4><code>ax audit</code> — show what you're about to run<span class="tag def">Defensible</span></h4>
+          <h4><code>agentpm audit</code> — show what you're about to run<span class="tag def">Defensible</span></h4>
           <p>Every skill is a prompt-injection surface and every MCP server is command execution on the developer's machine. skills.sh installs from arbitrary git URLs with no verification of any kind. Print what a bundle will execute, which tools it grants, and what changed since the last install; verify digests; refuse on mismatch.</p>
           <p>This turns the security work from the audit into the sales story. It is also the first question a security team asks, and right now nobody in this ecosystem has an answer.</p>
         </div>
@@ -331,7 +331,7 @@ pre-commit = "ahmed6ww/ax-agents#fmt-guard"</pre>
         <div class="inum">4</div>
         <div>
           <h4>Interoperate — don't fight the catalog</h4>
-          <p><code>ax install vercel-labs/agent-skills</code> must simply work, along with any git URL skills.sh accepts. Consume their ecosystem and wrap it in pinning, locking and verification.</p>
+          <p><code>agentpm install vercel-labs/agent-skills</code> must simply work, along with any git URL skills.sh accepts. Consume their ecosystem and wrap it in pinning, locking and verification.</p>
           <p>This kills the &ldquo;but they have a hundred thousand skills&rdquo; objection outright. You are not the rival catalog; you are the safe, reproducible way to consume every catalog. It also means your addressable content library is theirs on day one.</p>
         </div>
       </div>
@@ -339,7 +339,7 @@ pre-commit = "ahmed6ww/ax-agents#fmt-guard"</pre>
       <div class="item">
         <div class="inum">5</div>
         <div>
-          <h4>Profiles — <code>ax use frontend</code></h4>
+          <h4>Profiles — <code>agentpm use frontend</code></h4>
           <p>Swap an entire agent environment per context: frontend work, infra, incident response, code review. Cheap to build once bundles exist, immediately demoable, and genuinely novel — nobody in the space has it. Good candidate for the launch demo precisely because it is the feature people can see working in ten seconds.</p>
         </div>
       </div>
@@ -353,7 +353,7 @@ pre-commit = "ahmed6ww/ax-agents#fmt-guard"</pre>
 
     <h3>Distribution — and a naming decision you can't defer</h3>
     <p><code>npx skills add x</code> beats <code>curl | sh</code> plus a Rust binary for the thirty seconds where someone decides whether to try your tool. Keep Rust for the binary, but ship a thin npm wrapper that downloads the right prebuilt artifact so trial cost matches theirs.</p>
-    <p>That runs straight into a naming problem. <code>ax</code> is <b>taken on npm</b>, and <code>ax</code> on crates.io is an unrelated distributed-systems crate published in 2019 — which means the <code>cargo install ax</code> line currently in your README installs somebody else's package. <code>ax-cli</code> is also taken on npm; <code>axcli</code> and <code>agentpm</code> are free. Decide the published name now, while you have no users to migrate.</p>
+    <p>That runs straight into a naming problem. <code>agentpm</code> is <b>taken on npm</b>, and <code>agentpm</code> on crates.io is an unrelated distributed-systems crate published in 2019 — which means the <code>cargo install agentpm</code> line currently in your README installs somebody else's package. <code>ax-cli</code> is also taken on npm; <code>axcli</code> and <code>agentpm</code> are free. Decide the published name now, while you have no users to migrate.</p>
 
     <h3>Anthropic may build this</h3>
     <p>Plugins and marketplaces are already native to Claude Code, and reproducibility is an obvious next step for them. You cannot prevent that. What you can do is stand where they structurally will not: <b>Anthropic will never make Codex a first-class target.</b> Cross-agent parity plus team reproducibility is a position that stays defensible even if Claude Code ships a lockfile tomorrow — and it is another argument for keeping Codex, not quietly deprioritizing it.</p>
@@ -373,10 +373,10 @@ pre-commit = "ahmed6ww/ax-agents#fmt-guard"</pre>
     <h3>Revised phase order</h3>
 <pre><b>P0</b>  Correct paths · drop Cursor · the P0 security set     <i>~3 days</i>
 <b>P1</b>  Capability model · shared renderer · install ledger   <i>~1 week</i>
-    <i>ax uninstall · --json/--dry-run · CI</i>
-<b>P2</b>  <em>ax.toml + ax.lock + ax sync</em>  ← the wedge          <i>~2 weeks</i>
+    <i>agentpm uninstall · --json/--dry-run · CI</i>
+<b>P2</b>  <em>agentpm.toml + agentpm.lock + agentpm sync</em>  ← the wedge          <i>~2 weeks</i>
     <i>digests, pinning, sync --check</i>
-<b>P3</b>  Bundles · ax audit · git-source interop              <i>~2 weeks</i>
+<b>P3</b>  Bundles · agentpm audit · git-source interop              <i>~2 weeks</i>
 <b>P4</b>  Profiles · npm wrapper · launch                      <i>~1 week</i></pre>
     <p>That is roughly six weeks to something genuinely differentiated, and the first three days of it are fixing a product that does not currently work on the platforms you are betting on.</p>
   </section>

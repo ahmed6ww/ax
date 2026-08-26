@@ -1,4 +1,4 @@
-//! `ax uninstall` — remove an installed agent.
+//! `agentpm uninstall` — remove an installed agent.
 
 use anyhow::Result;
 use colored::Colorize;

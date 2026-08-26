@@ -1,4 +1,4 @@
-//! `ax install` — install an agent into Claude Code and/or Codex.
+//! `agentpm install` — install an agent into Claude Code and/or Codex.
 
 use anyhow::{Context, Result};
 use colored::Colorize;

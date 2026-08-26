@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use reqwest::Client;
 
 use super::agent::{AgentConfig, AgentInfo};
-use super::config::ApmConfig;
+use super::config::Config;
 
 /// Registry client for fetching agents
 pub struct Registry {
@@ -17,7 +17,7 @@ pub struct Registry {
 impl Registry {
     /// Create a new registry client
     pub fn new() -> Self {
-        let config = ApmConfig::load_or_default().unwrap_or_default();
+        let config = Config::load_or_default().unwrap_or_default();
         Self {
             client: Client::new(),
             base_url: config.registry_url,

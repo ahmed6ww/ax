@@ -428,7 +428,7 @@
   <section id="security">
     <p class="eyebrow">Register 01 — Security</p>
     <h2>Remote input reaches the filesystem and the shell</h2>
-    <p class="lede">Everything <code>ax install</code> writes originates from an unauthenticated HTTP fetch, and nothing between the wire and <code>fs::write</code> validates it.</p>
+    <p class="lede">Everything <code>agentpm install</code> writes originates from an unauthenticated HTTP fetch, and nothing between the wire and <code>fs::write</code> validates it.</p>
 
     <div class="register">
 
@@ -477,7 +477,7 @@
         <div class="fid">SEC&#8209;05<br><span class="sev">High</span></div>
         <div>
           <p class="ftitle">A malformed user config is silently destroyed</p>
-          <p class="fbody">Both JSON writers read the existing editor config and fall back to an empty object when parsing fails: <code>serde_json::from_str(&amp;content).unwrap_or_else(|_| json!({}))</code>. A trailing comma anywhere in the user's <code>claude_desktop_config.json</code> — or a file that is merely newer than what this parser understands — means <code>ax install</code> deletes every MCP server they had configured, with no error and no backup.</p>
+          <p class="fbody">Both JSON writers read the existing editor config and fall back to an empty object when parsing fails: <code>serde_json::from_str(&amp;content).unwrap_or_else(|_| json!({}))</code>. A trailing comma anywhere in the user's <code>claude_desktop_config.json</code> — or a file that is merely newer than what this parser understands — means <code>agentpm install</code> deletes every MCP server they had configured, with no error and no backup.</p>
           <p class="fbody fix"><b>Fix</b> Fail loudly on unparseable config and refuse to write. Never treat a parse error as an empty document.</p>
           <span class="ev">src/installers/claude.rs:358-363 · cursor.rs:416-421</span>
         </div>
@@ -487,7 +487,7 @@
         <div class="fid">SEC&#8209;06<br><span class="sev">High</span></div>
         <div>
           <p class="ftitle">Registry URL scheme is unrestricted</p>
-          <p class="fbody"><code>registry_url</code> is read from <code>~/.ax/config.toml</code> and used to build every fetch URL with no scheme check. A <code>http://</code> or <code>file://</code> value — set by a stray tutorial, a shared dotfile, or anything that can write that file — downgrades the entire trust chain to plaintext. The client is also built with <code>Client::new()</code>: no timeout, no retry policy, no redirect limit, no user-agent.</p>
+          <p class="fbody"><code>registry_url</code> is read from <code>~/.agentpm/config.toml</code> and used to build every fetch URL with no scheme check. A <code>http://</code> or <code>file://</code> value — set by a stray tutorial, a shared dotfile, or anything that can write that file — downgrades the entire trust chain to plaintext. The client is also built with <code>Client::new()</code>: no timeout, no retry policy, no redirect limit, no user-agent.</p>
           <p class="fbody fix"><b>Fix</b> Require <code>https://</code> unless <code>--allow-insecure-registry</code> is passed explicitly. Build one shared client with a 30s timeout, capped redirects and a versioned user-agent.</p>
           <span class="ev">src/core/config.rs:187-197 · registry.rs:19-33</span>
         </div>
@@ -507,7 +507,7 @@
         <div class="fid">SEC&#8209;08<br><span class="sev">Medium</span></div>
         <div>
           <p class="ftitle">Config writes are neither atomic nor backed up</p>
-          <p class="fbody">Every installer calls <code>fs::write</code> directly onto a live editor config. An interrupt or a crash mid-write leaves a truncated JSON or TOML file that the editor cannot load. Two concurrent <code>ax install</code> runs interleave and lose one another's writes.</p>
+          <p class="fbody">Every installer calls <code>fs::write</code> directly onto a live editor config. An interrupt or a crash mid-write leaves a truncated JSON or TOML file that the editor cannot load. Two concurrent <code>agentpm install</code> runs interleave and lose one another's writes.</p>
           <p class="fbody fix"><b>Fix</b> Write to a sibling temp file, <code>fsync</code>, then <code>rename</code> over the target. Keep a <code>.bak</code> of the previous version and take an advisory lock for the duration of an install.</p>
           <span class="ev">src/installers/claude.rs:394 · cursor.rs:444 · codex.rs:278</span>
         </div>
@@ -547,7 +547,7 @@
       <div class="finding sev-h">
         <div class="fid">BUG&#8209;01<br><span class="sev">High</span></div>
         <div>
-          <p class="ftitle"><code>ax list</code> panics on any non-ASCII description</p>
+          <p class="ftitle"><code>agentpm list</code> panics on any non-ASCII description</p>
           <p class="fbody">The truncation slices by byte offset — <code>&amp;agent.description[..35]</code> — which panics when byte 35 falls inside a multi-byte character. Every built-in agent description is ASCII, so this is invisible today; the first registry entry with an accent, an em-dash or an emoji crashes the command outright.</p>
           <p class="fbody fix"><b>Fix</b> Truncate on <code>char_indices</code>, or use a width-aware helper. Terminal width should also come from <code>console</code> rather than the hardcoded 85-column rule.</p>
           <span class="ev">src/cli/commands/list.rs:307-310</span>
@@ -558,7 +558,7 @@
         <div class="fid">BUG&#8209;02<br><span class="sev">High</span></div>
         <div>
           <p class="ftitle"><code>--global</code> does nothing on two of three targets</p>
-          <p class="fbody">Only Cursor reads the flag. <code>ClaudeInstaller.global</code> is never read — the compiler says so — and <code>CodexInstaller.global</code> is silenced with <code>#[allow(dead_code)]</code>. Both always write to the user's home directory, so <code>ax install foo</code> and <code>ax install foo --global</code> produce identical results, and there is no project-scoped install for Claude at all.</p>
+          <p class="fbody">Only Cursor reads the flag. <code>ClaudeInstaller.global</code> is never read — the compiler says so — and <code>CodexInstaller.global</code> is silenced with <code>#[allow(dead_code)]</code>. Both always write to the user's home directory, so <code>agentpm install foo</code> and <code>agentpm install foo --global</code> produce identical results, and there is no project-scoped install for Claude at all.</p>
           <p class="fbody fix"><b>Fix</b> Resolve a scope in one place and pass it to every renderer; if a target genuinely cannot do project-local installs, reject the flag with a clear message instead of accepting and ignoring it.</p>
           <span class="ev">src/installers/claude.rs:22 · codex.rs:22-23 · cursor.rs:328-334</span>
         </div>
@@ -597,8 +597,8 @@
       <div class="finding sev-m">
         <div class="fid">BUG&#8209;06<br><span class="sev">Medium</span></div>
         <div>
-          <p class="ftitle"><code>ax init</code> overwrites customized config</p>
-          <p class="fbody">Init unconditionally constructs <code>ApmConfig::new()</code> and saves it, discarding a custom <code>registry_url</code> or <code>verbose</code> setting. Re-running init — which the CLI encourages after installing an editor — resets the user's registry back to the default.</p>
+          <p class="ftitle"><code>agentpm init</code> overwrites customized config</p>
+          <p class="fbody">Init unconditionally constructs <code>Config::new()</code> and saves it, discarding a custom <code>registry_url</code> or <code>verbose</code> setting. Re-running init — which the CLI encourages after installing an editor — resets the user's registry back to the default.</p>
           <p class="fbody fix"><b>Fix</b> Load-merge-save, and only overwrite fields init actually re-detects. Prompt or require <code>--force</code> to reset.</p>
           <span class="ev">src/cli/commands/init.rs:192-201</span>
         </div>
@@ -607,7 +607,7 @@
       <div class="finding sev-m">
         <div class="fid">BUG&#8209;07<br><span class="sev">Medium</span></div>
         <div>
-          <p class="ftitle">There is no <code>ax uninstall</code></p>
+          <p class="ftitle">There is no <code>agentpm uninstall</code></p>
           <p class="fbody"><code>uninstall</code> is declared on the <code>Installer</code> trait and implemented three times, but no CLI subcommand ever calls it. All of that code is unreachable. Users have no supported way to remove an agent, and no way to discover what a previous install put on their disk.</p>
           <p class="fbody fix"><b>Fix</b> Wire the command — but base it on the install ledger (ARC-04) rather than on guessed paths, so it removes exactly what was written.</p>
           <span class="ev">src/installers/mod.rs:47-48 · src/cli/mod.rs:24-46</span>
@@ -637,7 +637,7 @@
       <div class="finding sev-m">
         <div class="fid">BUG&#8209;10<br><span class="sev">Medium</span></div>
         <div>
-          <p class="ftitle"><code>ax init</code> never detects Codex</p>
+          <p class="ftitle"><code>agentpm init</code> never detects Codex</p>
           <p class="fbody">Init probes Claude, Cursor and VS Code. Codex is a fully supported install target and <code>paths::codex_config_dir()</code> already exists, but init neither detects it nor can ever select it as the default target. VS Code, conversely, is detected but is not a valid target.</p>
           <p class="fbody fix"><b>Fix</b> Drive detection from the target enum so adding a target updates init automatically.</p>
           <span class="ev">src/cli/commands/init.rs:171-189 · utils/paths.rs:400</span>
@@ -698,7 +698,7 @@
         <div>
           <p class="ftitle">Versions are parsed and then ignored</p>
           <p class="fbody"><code>AgentConfig.version</code> is deserialized, displayed, and never used for anything. <code>fetch_agent</code> always retrieves whatever is at HEAD of the registry's main branch. You cannot install a specific version, cannot reproduce yesterday's install, and cannot roll back. For a tool positioning itself as npm-for-agents this is the defining missing feature.</p>
-          <p class="fbody fix"><b>Fix</b> <code>ax install name@1.2.0</code> with semver range resolution against the index, recorded in the ledger.</p>
+          <p class="fbody fix"><b>Fix</b> <code>agentpm install name@1.2.0</code> with semver range resolution against the index, recorded in the ledger.</p>
           <span class="ev">src/core/registry.rs:61-95 · core/agent.rs:14</span>
         </div>
       </div>
@@ -707,8 +707,8 @@
         <div class="fid">ARC&#8209;04<br><span class="sev">High</span></div>
         <div>
           <p class="ftitle">No record of what was installed</p>
-          <p class="fbody">Nothing on disk states which agents are installed, at what version, from which registry, to which target, or which files were written. That single gap is why uninstall must guess (BUG-07, BUG-08), why there can be no <code>ax update</code>, no <code>ax list --installed</code>, no drift detection, and no clean reinstall.</p>
-          <p class="fbody fix"><b>Fix</b> <code>~/.ax/state.json</code> — an install ledger keyed by (target, agent), recording version, source URL, digest, timestamp and the full list of written paths.</p>
+          <p class="fbody">Nothing on disk states which agents are installed, at what version, from which registry, to which target, or which files were written. That single gap is why uninstall must guess (BUG-07, BUG-08), why there can be no <code>agentpm update</code>, no <code>agentpm list --installed</code>, no drift detection, and no clean reinstall.</p>
+          <p class="fbody fix"><b>Fix</b> <code>~/.agentpm/state.json</code> — an install ledger keyed by (target, agent), recording version, source URL, digest, timestamp and the full list of written paths.</p>
           <span class="ev">architectural — no such module exists</span>
         </div>
       </div>
@@ -747,7 +747,7 @@
         <div class="fid">ARC&#8209;08<br><span class="sev">Medium</span></div>
         <div>
           <p class="ftitle">No error taxonomy — <code>thiserror</code> is a dependency that is never used</p>
-          <p class="fbody">Everything is <code>anyhow</code>, including in the library crate that external code consumes. Callers cannot distinguish &ldquo;agent not found&rdquo; from &ldquo;network down&rdquo; from &ldquo;bad YAML&rdquo;, so the CLI cannot vary its message or its exit code — every failure exits 1. That makes <code>ax</code> unscriptable in CI.</p>
+          <p class="fbody">Everything is <code>anyhow</code>, including in the library crate that external code consumes. Callers cannot distinguish &ldquo;agent not found&rdquo; from &ldquo;network down&rdquo; from &ldquo;bad YAML&rdquo;, so the CLI cannot vary its message or its exit code — every failure exits 1. That makes <code>agentpm</code> unscriptable in CI.</p>
           <p class="fbody fix"><b>Fix</b> A <code>thiserror</code> enum in the library (<code>NotFound</code>, <code>Network</code>, <code>Parse</code>, <code>Integrity</code>, <code>Io</code>, <code>Denied</code>); keep <code>anyhow</code> at the binary edge; map variants to distinct exit codes.</p>
           <span class="ev">Cargo.toml:38 · src/ (no thiserror import anywhere)</span>
         </div>
@@ -757,8 +757,8 @@
         <div class="fid">ARC&#8209;09<br><span class="sev">Medium</span></div>
         <div>
           <p class="ftitle">No caching — every command is a cold network round-trip</p>
-          <p class="fbody"><code>ax list</code> always hits the network. Installing the same agent to two targets downloads everything twice. There is no ETag or <code>If-None-Match</code> handling, no offline mode, and no content-addressed store. On an unauthenticated GitHub endpoint this also runs straight into rate limiting.</p>
-          <p class="fbody fix"><b>Fix</b> <code>~/.ax/cache/</code> keyed by digest, with ETag revalidation on the index and an <code>--offline</code> flag.</p>
+          <p class="fbody"><code>agentpm list</code> always hits the network. Installing the same agent to two targets downloads everything twice. There is no ETag or <code>If-None-Match</code> handling, no offline mode, and no content-addressed store. On an unauthenticated GitHub endpoint this also runs straight into rate limiting.</p>
+          <p class="fbody fix"><b>Fix</b> <code>~/.agentpm/cache/</code> keyed by digest, with ETag revalidation on the index and an <code>--offline</code> flag.</p>
           <span class="ev">src/core/registry.rs:36-57</span>
         </div>
       </div>
@@ -776,8 +776,8 @@
       <div class="finding sev-l">
         <div class="fid">ARC&#8209;11<br><span class="sev">Low</span></div>
         <div>
-          <p class="ftitle">The APM→AX rename left stale identifiers</p>
-          <p class="fbody">The public type is still <code>ApmConfig</code>, its doc comment points at <code>~/.apm/config.toml</code> which no longer exists, and the command modules are headed <code>apm init</code> / <code>apm install</code>. Small, but it is the first thing a new contributor reads.</p>
+          <p class="ftitle">The APM→agentpm rename left stale identifiers</p>
+          <p class="fbody">The public type is still <code>Config</code>, its doc comment points at <code>~/.apm/config.toml</code> which no longer exists, and the command modules are headed <code>apm init</code> / <code>apm install</code>. Small, but it is the first thing a new contributor reads.</p>
           <p class="fbody fix"><b>Fix</b> Rename to <code>AxConfig</code> with a deprecated alias; sweep the doc comments.</p>
           <span class="ev">src/core/config.rs:172-182 · cli/commands/init.rs:1 · install.rs:1 · list.rs:1</span>
         </div>
@@ -866,7 +866,7 @@
         <div class="fid">OPS&#8209;08<br><span class="sev">Medium</span></div>
         <div>
           <p class="ftitle">The Windows binary is built but unreachable</p>
-          <p class="fbody">The release matrix produces <code>ax-windows-x64.exe</code>, but <code>install.sh</code> has no Windows branch and there is no PowerShell installer. Windows users have no documented install path short of building from source — on a project whose own development happens on Windows.</p>
+          <p class="fbody">The release matrix produces <code>agentpm-windows-x64.exe</code>, but <code>install.sh</code> has no Windows branch and there is no PowerShell installer. Windows users have no documented install path short of building from source — on a project whose own development happens on Windows.</p>
           <p class="fbody fix"><b>Fix</b> An <code>install.ps1</code> with the same checksum verification, plus winget or scoop.</p>
           <span class="ev">install.sh:24-42 · release.yml:32-34</span>
         </div>
@@ -876,7 +876,7 @@
         <div class="fid">OPS&#8209;09<br><span class="sev">Low</span></div>
         <div>
           <p class="ftitle">No dependency monitoring and no published crate</p>
-          <p class="fbody">No <code>cargo-deny</code>, no <code>cargo-audit</code>, no Dependabot. The crate metadata is complete and ready for crates.io, but the README tells users to <code>cargo install ax</code>, which installs an unrelated crate.</p>
+          <p class="fbody">No <code>cargo-deny</code>, no <code>cargo-audit</code>, no Dependabot. The crate metadata is complete and ready for crates.io, but the README tells users to <code>cargo install agentpm</code>, which installs an unrelated crate.</p>
           <p class="fbody fix"><b>Fix</b> <code>deny.toml</code> plus Dependabot; publish to crates.io or correct the README.</p>
           <span class="ev">Cargo.toml:1-11 · README.md:44</span>
         </div>
@@ -959,7 +959,7 @@
 <b>stage</b>     render per target into $TMP/ax-&lt;uuid&gt;/
           <i>SafeName has already made traversal unrepresentable</i>
 
-<b>commit</b>    fsync → rename → append to ~/.ax/state.json
+<b>commit</b>    fsync → rename → append to ~/.agentpm/state.json
           <i>any failure replays the journal backwards</i></pre>
 
     <div class="note">
@@ -970,7 +970,7 @@
   <section id="roadmap">
     <p class="eyebrow">Sequencing</p>
     <h2>Five phases, ordered by what unblocks what</h2>
-    <p class="lede">P0 is containment and can ship as a patch release without touching the architecture. P2 is the phase that turns <code>ax</code> into an actual package manager; everything before it exists to make P2 safe to build on.</p>
+    <p class="lede">P0 is containment and can ship as a patch release without touching the architecture. P2 is the phase that turns <code>agentpm</code> into an actual package manager; everything before it exists to make P2 safe to build on.</p>
 
     <div class="tablewrap">
       <table>
@@ -986,7 +986,7 @@
           </tr>
           <tr>
             <td class="ph">P1</td>
-            <td><b>Foundation.</b> <code>thiserror</code> taxonomy and exit codes; extract <code>installers/common</code>; capability model; the install ledger; wire <code>ax uninstall</code>; global <code>-v/-q/--json/--yes/--dry-run</code>; fix <code>--global</code>; init detects Codex and merges rather than overwrites; CI with fmt, clippy <code>-D warnings</code>, tests; first integration tests against a temp HOME.</td>
+            <td><b>Foundation.</b> <code>thiserror</code> taxonomy and exit codes; extract <code>installers/common</code>; capability model; the install ledger; wire <code>agentpm uninstall</code>; global <code>-v/-q/--json/--yes/--dry-run</code>; fix <code>--global</code>; init detects Codex and merges rather than overwrites; CI with fmt, clippy <code>-D warnings</code>, tests; first integration tests against a temp HOME.</td>
             <td class="ids">BUG-02 · BUG-06 · BUG-07<br>BUG-08 · BUG-10 · BUG-12<br>ARC-04 · ARC-06 · ARC-07<br>ARC-08 · ARC-10 · ARC-11<br>OPS-02 · OPS-05</td>
             <td class="dur">~1 week</td>
           </tr>
@@ -1004,7 +1004,7 @@
           </tr>
           <tr>
             <td class="ph">P4</td>
-            <td><b>Product.</b> <code>ax search</code>, <code>ax create</code>, <code>ax publish</code>, <code>ax update</code>; a project-scoped <code>ax.toml</code> with <code>ax.lock</code> and <code>ax sync</code> so a repo can pin its agent set the way it pins its dependencies; private registries with auth; VS Code as a fourth target.</td>
+            <td><b>Product.</b> <code>agentpm search</code>, <code>agentpm create</code>, <code>agentpm publish</code>, <code>agentpm update</code>; a project-scoped <code>agentpm.toml</code> with <code>agentpm.lock</code> and <code>agentpm sync</code> so a repo can pin its agent set the way it pins its dependencies; private registries with auth; VS Code as a fourth target.</td>
             <td class="ids">roadmap items from README<br>plus the multi-registry story</td>
             <td class="dur">ongoing</td>
           </tr>
@@ -1014,7 +1014,7 @@
 
     <h3>Two decisions worth making before P2</h3>
     <ul class="tight">
-      <li><b>Is the registry a git repo or a service?</b> Raw-GitHub is free, cacheable and needs no operations, but it cannot do search, download counts, or namespaced publishing — and it is why resolution is guesswork today. A signed static index on a CDN keeps the zero-ops property while removing the guessing; a service is only worth it once <code>ax publish</code> exists. Recommendation: static signed index now, service at P4 if publishing takes off.</li>
+      <li><b>Is the registry a git repo or a service?</b> Raw-GitHub is free, cacheable and needs no operations, but it cannot do search, download counts, or namespaced publishing — and it is why resolution is guesswork today. A signed static index on a CDN keeps the zero-ops property while removing the guessing; a service is only worth it once <code>agentpm publish</code> exists. Recommendation: static signed index now, service at P4 if publishing takes off.</li>
       <li><b>Does an agent get to ship executable scripts?</b> Today it does, silently. The honest options are to keep it behind the trust gate with the executable files listed explicitly, or to drop <code>scripts/</code> and make skills declarative-only. The first is more useful; the second is far easier to secure. Deciding this changes how much of the trust gate needs to exist.</li>
     </ul>
   </section>

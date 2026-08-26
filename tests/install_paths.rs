@@ -1,4 +1,4 @@
-//! Asserts that AX writes where Claude Code and Codex actually read.
+//! Asserts that agentpm writes where Claude Code and Codex actually read.
 //!
 //! These tests exist because the paths were wrong in every release up to 1.5.0:
 //! Claude Code skills went to the Claude Desktop directory on macOS and
@@ -13,9 +13,9 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use ax_lib::core::agent::{AgentConfig, Identity, McpTool, Skill};
-use ax_lib::installers::{get_installer, Target};
-use ax_lib::utils::paths::Scope;
+use agentpm_lib::core::agent::{AgentConfig, Identity, McpTool, Skill};
+use agentpm_lib::installers::{get_installer, Target};
+use agentpm_lib::utils::paths::Scope;
 
 /// Run `f` with HOME and the working directory pointed at a temp project.
 ///
@@ -30,12 +30,12 @@ fn in_temp_project<F: FnOnce(&Path, &Path)>(f: F) {
     fs::create_dir_all(project.join(".git")).unwrap();
 
     let prev_cwd = std::env::current_dir().unwrap();
-    let prev_ax_home = std::env::var_os("AX_HOME");
+    let prev_ax_home = std::env::var_os("AGENTPM_HOME");
     let prev_claude_dir = std::env::var_os("CLAUDE_CONFIG_DIR");
 
-    // AX_HOME, not HOME: dirs::home_dir() ignores HOME on Windows, so an
+    // AGENTPM_HOME, not HOME: dirs::home_dir() ignores HOME on Windows, so an
     // earlier version of this harness wrote into the real home directory.
-    std::env::set_var("AX_HOME", home.path());
+    std::env::set_var("AGENTPM_HOME", home.path());
     std::env::remove_var("CLAUDE_CONFIG_DIR");
     std::env::set_current_dir(&project).unwrap();
 
@@ -44,8 +44,8 @@ fn in_temp_project<F: FnOnce(&Path, &Path)>(f: F) {
 
     std::env::set_current_dir(prev_cwd).ok();
     match prev_ax_home {
-        Some(v) => std::env::set_var("AX_HOME", v),
-        None => std::env::remove_var("AX_HOME"),
+        Some(v) => std::env::set_var("AGENTPM_HOME", v),
+        None => std::env::remove_var("AGENTPM_HOME"),
     }
     if let Some(v) = prev_claude_dir {
         std::env::set_var("CLAUDE_CONFIG_DIR", v);

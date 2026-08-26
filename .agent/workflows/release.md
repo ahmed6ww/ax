@@ -4,7 +4,7 @@ description: How to release a new version of AX
 
 # Release Workflow for AX
 
-This workflow guides you through releasing a new version of AX to GitHub and making it available via the install script.
+This workflow guides you through releasing a new version of agentpm to GitHub and making it available via the install script.
 
 ## Prerequisites
 

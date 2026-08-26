@@ -108,18 +108,18 @@ pub fn write_atomic(path: &Path, contents: &[u8]) -> Result<()> {
         .and_then(|n| n.to_str())
         .unwrap_or("staged");
 
-    // Keep one generation of whatever was already here. AX rewrites files it
+    // Keep one generation of whatever was already here. agentpm rewrites files it
     // does not own — a user's `.mcp.json` or Codex `config.toml` — and
     // serializing through a parser drops comments and reorders keys, so the
     // previous contents have to remain recoverable.
     if path.exists() {
-        let backup = parent.join(format!("{}.ax-bak", name));
+        let backup = parent.join(format!("{}.agentpm-bak", name));
         fs::copy(path, &backup).with_context(|| {
             format!("Failed to back up {} before rewriting it", path.display())
         })?;
     }
 
-    let tmp = parent.join(format!(".{}.ax-tmp", name));
+    let tmp = parent.join(format!(".{}.agentpm-tmp", name));
 
     {
         let mut file = fs::File::create(&tmp)
@@ -255,7 +255,7 @@ mod tests {
         let leftovers: Vec<_> = fs::read_dir(target.parent().unwrap())
             .unwrap()
             .filter_map(|e| e.ok())
-            .filter(|e| e.file_name().to_string_lossy().contains("ax-tmp"))
+            .filter(|e| e.file_name().to_string_lossy().contains("agentpm-tmp"))
             .collect();
         assert!(leftovers.is_empty());
     }

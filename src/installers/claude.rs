@@ -122,7 +122,7 @@ impl Installer for ClaudeInstaller {
             } else {
                 serde_json::from_str(&content).with_context(|| {
                     format!(
-                        "{} is not valid JSON. AX will not overwrite it — \
+                        "{} is not valid JSON. agentpm will not overwrite it — \
                          fix or move the file, then retry.",
                         config_path.display()
                     )

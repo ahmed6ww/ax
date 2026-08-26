@@ -1,4 +1,4 @@
-# AX (Agent Package Manager)
+# agentpm (Agent Package Manager)
 
 > **The npm of the Agentic AI era.**
 >
@@ -10,13 +10,13 @@
 
 ## 🚀 What is AX?
 
-AX is a Rust-based CLI tool that solves **Configuration Fatigue** in AI-assisted development. Instead of manually configuring System Prompts, MCP Servers, and Documentation files for every new project, developers simply run:
+agentpm is a Rust-based CLI tool that solves **Configuration Fatigue** in AI-assisted development. Instead of manually configuring System Prompts, MCP Servers, and Documentation files for every new project, developers simply run:
 
 ```bash
-ax install code-cleaner
+agentpm install code-cleaner
 ```
 
-AX acts as a **Transpiler**: It reads a universal **Agent Skill Standard** definition and compiles it into the native format of your environment—whether that's Claude Code or Cursor.
+agentpm acts as a **Transpiler**: It reads a universal **Agent Skill Standard** definition and compiles it into the native format of your environment—whether that's Claude Code or Cursor.
 
 ## ✨ Features
 
@@ -41,7 +41,7 @@ curl -fsSL https://raw.githubusercontent.com/ahmed6ww/ax/main/install.sh | sh
 git clone https://github.com/ahmed6ww/ax
 cd ax
 cargo build --release
-sudo cp target/release/ax /usr/local/bin/
+sudo cp target/release/agentpm /usr/local/bin/
 ```
 
 ## 🎮 Quick Start
@@ -49,15 +49,15 @@ sudo cp target/release/ax /usr/local/bin/
 ### 1. Initialize AX
 
 ```bash
-ax init
+agentpm init
 ```
 
-This detects your installed editors and creates `~/.ax/config.toml`.
+This detects your installed editors and creates `~/.agentpm/config.toml`.
 
 ### 2. Browse Available Agents
 
 ```bash
-ax list
+agentpm list
 ```
 
 Output:
@@ -74,20 +74,20 @@ Output:
   nextjs-code-structure        1.0.0      Feature-sliced design for Scalable Next.js
   
   → 6 agent(s) available
-  → Install with: ax install <agent-name>
+  → Install with: agentpm install <agent-name>
 ```
 
 ### 3. Install an Agent
 
 ```bash
 # Install to Claude Code (default)
-ax install code-cleaner
+agentpm install code-cleaner
 
 # Install to Cursor
-ax install code-cleaner --target cursor
+agentpm install code-cleaner --target cursor
 
 # Install globally
-ax install code-cleaner --global
+agentpm install code-cleaner --global
 ```
 
 ## 📐 The Agent Skill Standard
@@ -126,7 +126,7 @@ You must strictly adhere to the "Two Hats" metaphor.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                          AX                             │
+│                          agentpm                             │
 ├─────────────────────────────────────────────────────────┤
 │  ┌─────────┐    ┌─────────────┐    ┌─────────────────┐ │
 │  │  init   │    │    list     │    │     install     │ │
@@ -156,8 +156,8 @@ You must strictly adhere to the "Two Hats" metaphor.
 - [x] **Agent Skill Standard (v2)**
 - [ ] VS Code extension
 - [ ] Private registries
-- [ ] `ax create` template generator
-- [ ] `ax publish` for community agents
+- [ ] `agentpm create` template generator
+- [ ] `agentpm publish` for community agents
 
 ## 📄 License
 

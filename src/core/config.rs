@@ -8,7 +8,7 @@ use std::path::Path;
 
 /// APM Configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ApmConfig {
+pub struct Config {
     /// Default target for installations (claude, cursor)
     pub default_target: String,
 
@@ -25,7 +25,7 @@ fn default_registry_url() -> String {
     "https://raw.githubusercontent.com/ahmed6ww/ax-agents/main".to_string()
 }
 
-impl ApmConfig {
+impl Config {
     /// Create a new configuration with default settings
     pub fn new(default_target: String) -> Self {
         Self {
@@ -51,7 +51,7 @@ impl ApmConfig {
 
     /// Load configuration or create default
     pub fn load_or_default() -> Result<Self> {
-        let path = crate::utils::paths::ax_config_path()?;
+        let path = crate::utils::paths::agentpm_config_path()?;
         if path.exists() {
             Self::load(&path)
         } else {
@@ -60,7 +60,7 @@ impl ApmConfig {
     }
 }
 
-impl Default for ApmConfig {
+impl Default for Config {
     fn default() -> Self {
         Self::new("claude".to_string())
     }

@@ -1,15 +1,15 @@
-//! `ax init` — detect installed agents and write AX configuration.
+//! `agentpm init` — detect installed agents and write agentpm configuration.
 
 use anyhow::Result;
 use colored::Colorize;
 
-use crate::core::config::ApmConfig;
+use crate::core::config::Config;
 use crate::installers::Target;
 use crate::utils::paths::{self, Scope};
 use crate::utils::ui;
 
 pub async fn execute() -> Result<()> {
-    ui::print_header("AX Initialization");
+    ui::print_header("agentpm Initialization");
 
     println!("{} Detecting agents...\n", "→".cyan());
 
@@ -56,18 +56,18 @@ pub async fn execute() -> Result<()> {
     if detected.is_empty() {
         ui::print_warning("No supported agent detected.");
         println!(
-            "  {} AX targets Claude Code and Codex. Install one, then re-run {}.",
+            "  {} agentpm targets Claude Code and Codex. Install one, then re-run {}.",
             "→".cyan(),
-            "ax init".cyan().bold()
+            "agentpm init".cyan().bold()
         );
     }
 
     // Preserve an existing configuration. Re-running init previously reset a
     // customized registry URL back to the default.
-    let config_path = paths::ax_config_path()?;
+    let config_path = paths::agentpm_config_path()?;
     let existed = config_path.exists();
 
-    let mut config = ApmConfig::load_or_default()?;
+    let mut config = Config::load_or_default()?;
     if let Some(first) = detected.first() {
         config.default_target = first.slug().to_string();
     }
@@ -97,10 +97,10 @@ pub async fn execute() -> Result<()> {
     }
 
     println!();
-    ui::print_success("AX initialized.");
+    ui::print_success("agentpm initialized.");
     println!(
         "\n  Run {} to see available agents.",
-        "ax list".cyan().bold()
+        "agentpm list".cyan().bold()
     );
 
     Ok(())

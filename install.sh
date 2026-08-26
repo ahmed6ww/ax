@@ -1,5 +1,5 @@
 #!/bin/bash
-# AX Installer - One-line installation script
+# agentpm Installer - One-line installation script
 # Usage: curl -fsSL https://raw.githubusercontent.com/ahmed6ww/ax/main/install.sh | bash
 
 set -e
@@ -12,7 +12,7 @@ NC='\033[0m' # No Color
 
 echo -e "${CYAN}"
 echo "  ╔═══════════════════════════════════════╗"
-echo "  ║     AX - Agent Package Manager        ║"
+echo "  ║     agentpm - Agent Package Manager        ║"
 echo "  ║   The npm of the Agentic AI era       ║"
 echo "  ╚═══════════════════════════════════════╝"
 echo -e "${NC}"
@@ -23,20 +23,20 @@ ARCH=$(uname -m)
 
 case "$OS-$ARCH" in
   linux-x86_64)   
-    BINARY="ax-linux-x64"
+    BINARY="agentpm-linux-x64"
     ;;
   linux-aarch64)   
-    BINARY="ax-linux-arm64"
+    BINARY="agentpm-linux-arm64"
     ;;
   darwin-x86_64)  
-    BINARY="ax-macos-x64"
+    BINARY="agentpm-macos-x64"
     ;;
   darwin-arm64)   
-    BINARY="ax-macos-arm64"
+    BINARY="agentpm-macos-arm64"
     ;;
   *)
     echo -e "${RED}Error: Unsupported platform: $OS-$ARCH${NC}"
-    echo "Please build from source: cargo install ax"
+    echo "Please build from source: cargo install agentpm"
     exit 1
     ;;
 esac
@@ -51,7 +51,7 @@ if [ -z "$VERSION" ]; then
   VERSION="v1.3.0"
 fi
 
-echo "→ Installing AX $VERSION..."
+echo "→ Installing agentpm $VERSION..."
 
 # Download binary
 URL="https://github.com/ahmed6ww/ax/releases/download/$VERSION/$BINARY"
@@ -62,7 +62,7 @@ if ! curl -fsSL "$URL" -o "$TEMP_FILE" 2>/dev/null; then
   echo "URL: $URL"
   echo ""
   echo "Try building from source instead:"
-  echo "  cargo install ax"
+  echo "  cargo install agentpm"
   rm -f "$TEMP_FILE"
   exit 1
 fi
@@ -72,26 +72,26 @@ chmod +x "$TEMP_FILE"
 
 # Try to install to /usr/local/bin, fallback to ~/.local/bin
 if [ -w /usr/local/bin ]; then
-  mv "$TEMP_FILE" /usr/local/bin/ax
-  echo -e "${GREEN}✓ Installed to /usr/local/bin/ax${NC}"
+  mv "$TEMP_FILE" /usr/local/bin/agentpm
+  echo -e "${GREEN}✓ Installed to /usr/local/bin/agentpm${NC}"
 elif command -v sudo &> /dev/null; then
-  sudo mv "$TEMP_FILE" /usr/local/bin/ax
-  echo -e "${GREEN}✓ Installed to /usr/local/bin/ax${NC}"
+  sudo mv "$TEMP_FILE" /usr/local/bin/agentpm
+  echo -e "${GREEN}✓ Installed to /usr/local/bin/agentpm${NC}"
 else
   mkdir -p ~/.local/bin
-  mv "$TEMP_FILE" ~/.local/bin/ax
-  echo -e "${GREEN}✓ Installed to ~/.local/bin/ax${NC}"
+  mv "$TEMP_FILE" ~/.local/bin/agentpm
+  echo -e "${GREEN}✓ Installed to ~/.local/bin/agentpm${NC}"
   echo ""
   echo "Add to PATH if not already:"
   echo '  export PATH="$HOME/.local/bin:$PATH"'
 fi
 
 echo ""
-echo -e "${GREEN}✅ AX installed successfully!${NC}"
+echo -e "${GREEN}✅ agentpm installed successfully!${NC}"
 echo ""
 echo "Get started:"
-echo "  ax init                          # Initialize AX"
-echo "  ax list                          # Browse available agents"
-echo "  ax install rust-architect        # Install an agent"
+echo "  agentpm init                          # Initialize AX"
+echo "  agentpm list                          # Browse available agents"
+echo "  agentpm install rust-architect        # Install an agent"
 echo ""
 echo -e "${CYAN}Learn more: https://github.com/ahmed6ww/ax${NC}"
