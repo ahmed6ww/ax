@@ -17,6 +17,9 @@ async fn main() -> Result<()> {
             target,
             global,
         } => agentpm_lib::cli::commands::install::execute(&agent, target, global).await,
+        Commands::Sync { check, update } => {
+            agentpm_lib::cli::commands::sync::execute(check, update).await
+        }
         Commands::Uninstall {
             agent,
             target,

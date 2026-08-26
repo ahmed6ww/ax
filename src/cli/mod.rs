@@ -42,6 +42,17 @@ pub enum Commands {
         global: bool,
     },
 
+    /// Install everything agentpm.toml declares, for the whole team
+    Sync {
+        /// Verify only: write nothing and exit non-zero if the tree has drifted
+        #[arg(long, default_value = "false")]
+        check: bool,
+
+        /// Re-resolve every source to its latest commit and rewrite the lockfile
+        #[arg(long, default_value = "false")]
+        update: bool,
+    },
+
     /// Remove an installed agent
     Uninstall {
         /// Name of the agent to remove

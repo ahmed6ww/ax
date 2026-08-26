@@ -3,6 +3,7 @@
 pub mod init;
 pub mod install;
 pub mod list;
+pub mod sync;
 pub mod uninstall;
 
 use anyhow::Result;

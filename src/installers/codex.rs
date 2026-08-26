@@ -17,7 +17,10 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
 
-use super::common::{copy_skill_subdirectories, render_skill_md, skill_dir, write_atomic};
+use super::common::{
+    copy_skill_subdirectories, render_skill_md, skill_dir, write_atomic,
+    write_atomic_preserving,
+};
 use super::{Capabilities, Installer};
 use crate::core::agent::{AgentConfig, Skill};
 use crate::utils::paths::{self, Scope};
@@ -62,6 +65,10 @@ impl Installer for CodexInstaller {
         }
     }
 
+    fn skills_root(&self) -> Result<PathBuf> {
+        self.skills_dir()
+    }
+
     fn install_identity(&self, _agent: &AgentConfig) -> Result<()> {
         // Handled inside install_skills; the orchestrator does not call this
         // because `capabilities().subagents` is false.
@@ -93,7 +100,11 @@ impl Installer for CodexInstaller {
         Ok(())
     }
 
-    fn install_tools(&self, agent: &AgentConfig) -> Result<()> {
+    fn install_mcp(&self, tools: &[crate::core::agent::McpTool]) -> Result<()> {
+        if tools.is_empty() {
+            return Ok(());
+        }
+
         let config_path = paths::codex_mcp_config()?;
 
         // Parse and re-serialize through the toml crate. The previous
@@ -128,7 +139,7 @@ impl Installer for CodexInstaller {
             )
         })?;
 
-        for tool in &agent.mcp {
+        for tool in tools {
             let mut entry = toml::Table::new();
             entry.insert(
                 "command".to_string(),
@@ -163,7 +174,7 @@ impl Installer for CodexInstaller {
 
         let rendered = toml::to_string_pretty(&doc)
             .context("Failed to serialize Codex configuration")?;
-        write_atomic(&config_path, rendered.as_bytes())
+        write_atomic_preserving(&config_path, rendered.as_bytes())
     }
 
     fn uninstall(&self, agent_name: &str) -> Result<()> {

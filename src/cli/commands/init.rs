@@ -4,6 +4,7 @@ use anyhow::Result;
 use colored::Colorize;
 
 use crate::core::config::Config;
+use crate::core::manifest::{Manifest, MANIFEST_FILE};
 use crate::installers::Target;
 use crate::utils::paths::{self, Scope};
 use crate::utils::ui;
@@ -96,11 +97,37 @@ pub async fn execute() -> Result<()> {
         );
     }
 
+    // Scaffold the project manifest. This is the file a team commits, so init
+    // must never overwrite one that already exists.
+    let manifest_path = paths::project_root()?.join(MANIFEST_FILE);
+    if manifest_path.exists() {
+        println!(
+            "{} {} already exists — left untouched",
+            "·".dimmed(),
+            manifest_path.display().to_string().dimmed()
+        );
+    } else {
+        Manifest::starter(&detected).save(&manifest_path)?;
+        println!(
+            "{} Created {}",
+            "✓".green().bold(),
+            manifest_path.display().to_string().cyan()
+        );
+    }
+
     println!();
     ui::print_success("agentpm initialized.");
+    println!("\n  Next:");
     println!(
-        "\n  Run {} to see available agents.",
-        "agentpm list".cyan().bold()
+        "    1. Add skills under {} in {}",
+        "[skills]".bold(),
+        MANIFEST_FILE.cyan()
+    );
+    println!("    2. Run {} to install them", "agentpm sync".cyan().bold());
+    println!(
+        "    3. Commit {} and {} so your team resolves the same commits",
+        MANIFEST_FILE.cyan(),
+        crate::core::lockfile::LOCKFILE.cyan()
     );
 
     Ok(())

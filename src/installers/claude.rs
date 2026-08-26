@@ -16,7 +16,10 @@ use serde_json::{json, Map, Value};
 use std::fs;
 use std::path::PathBuf;
 
-use super::common::{copy_skill_subdirectories, render_skill_md, skill_dir, write_atomic};
+use super::common::{
+    copy_skill_subdirectories, render_skill_md, skill_dir, write_atomic,
+    write_atomic_preserving,
+};
 use super::{Capabilities, Installer};
 use crate::core::agent::AgentConfig;
 use crate::utils::paths::{self, Scope};
@@ -84,6 +87,10 @@ impl Installer for ClaudeInstaller {
         }
     }
 
+    fn skills_root(&self) -> Result<PathBuf> {
+        self.skills_dir()
+    }
+
     fn install_identity(&self, agent: &AgentConfig) -> Result<()> {
         let agents_dir = self.agents_dir()?;
         let file = skill_dir(&agents_dir, &format!("{}.md", agent.name))
@@ -107,7 +114,11 @@ impl Installer for ClaudeInstaller {
         Ok(())
     }
 
-    fn install_tools(&self, agent: &AgentConfig) -> Result<()> {
+    fn install_mcp(&self, tools: &[crate::core::agent::McpTool]) -> Result<()> {
+        if tools.is_empty() {
+            return Ok(());
+        }
+
         let config_path = paths::claude_mcp_config(self.scope)?;
 
         // Preserve everything already in the file. `~/.claude.json` in
@@ -152,7 +163,7 @@ impl Installer for ClaudeInstaller {
             );
         }
 
-        for tool in &agent.mcp {
+        for tool in tools {
             servers[&tool.name] = json!({
                 "type": "stdio",
                 "command": tool.command,
@@ -162,7 +173,7 @@ impl Installer for ClaudeInstaller {
         }
 
         let rendered = serde_json::to_string_pretty(&config)? + "\n";
-        write_atomic(&config_path, rendered.as_bytes())
+        write_atomic_preserving(&config_path, rendered.as_bytes())
     }
 
     fn uninstall(&self, agent_name: &str) -> Result<()> {

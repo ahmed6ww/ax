@@ -9,6 +9,7 @@ mod codex;
 pub mod common;
 
 use anyhow::Result;
+use std::path::PathBuf;
 
 pub use claude::ClaudeInstaller;
 pub use codex::CodexInstaller;
@@ -70,13 +71,38 @@ pub trait Installer: Send + Sync {
     /// Only called when `capabilities().subagents` is true.
     fn install_identity(&self, agent: &AgentConfig) -> Result<()>;
 
+    /// Where this target discovers skills, for the configured scope.
+    fn skills_root(&self) -> Result<PathBuf>;
+
     /// Install the agent's skills.
     fn install_skills(&self, agent: &AgentConfig) -> Result<()>;
+
+    /// Install already-fetched files verbatim under `skill_name`.
+    ///
+    /// `agentpm sync` uses this rather than re-rendering: the bytes on disk then
+    /// match the digests recorded in the lockfile, so drift is detectable
+    /// without refetching, and the author's own frontmatter is preserved.
+    fn install_files(&self, skill_name: &str, files: &[(String, Vec<u8>)]) -> Result<PathBuf> {
+        let root = self.skills_root()?;
+        let dir = common::skill_dir(&root, skill_name)?;
+
+        for (relative, bytes) in files {
+            let target = common::safe_join(&dir, relative)?;
+            common::write_atomic(&target, bytes)?;
+        }
+
+        Ok(dir)
+    }
+
+    /// Configure MCP servers.
+    fn install_mcp(&self, tools: &[crate::core::agent::McpTool]) -> Result<()>;
 
     /// Install the agent's MCP servers.
     ///
     /// Only called when `capabilities().mcp` is true.
-    fn install_tools(&self, agent: &AgentConfig) -> Result<()>;
+    fn install_tools(&self, agent: &AgentConfig) -> Result<()> {
+        self.install_mcp(&agent.mcp)
+    }
 
     /// Remove an agent by name.
     fn uninstall(&self, agent_name: &str) -> Result<()>;

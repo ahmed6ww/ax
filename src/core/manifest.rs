@@ -17,6 +17,7 @@ use crate::utils::paths::Scope;
 pub const MANIFEST_FILE: &str = "agentpm.toml";
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Manifest {
     #[serde(default)]
     pub targets: Targets,
@@ -31,6 +32,7 @@ pub struct Manifest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Targets {
     /// Which agents to provision. Defaults to both supported targets.
     #[serde(default = "default_agents")]
@@ -145,6 +147,7 @@ impl SkillSpec {
 
 /// An MCP server declared by the project.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct McpSpec {
     pub command: String,
     #[serde(default)]
@@ -282,6 +285,18 @@ agents = ["cursor"]
         assert_eq!(tool.command, "npx");
         assert_eq!(tool.args, vec!["-y", "@upstash/context7-mcp"]);
         assert_eq!(tool.env["CONTEXT7_API_KEY"], "${CONTEXT7_API_KEY}");
+    }
+
+    #[test]
+    fn a_misplaced_key_is_an_error_not_a_silent_no_op() {
+        // Appending a skill after an [mcp.*] table puts it inside that table.
+        // Without deny_unknown_fields this parsed happily and the skill vanished.
+        let bad = r#"
+[mcp.context7]
+command = "npx"
+web-perf = { source = "cloudflare/skills" }
+"#;
+        assert!(toml::from_str::<Manifest>(bad).is_err());
     }
 
     #[test]
