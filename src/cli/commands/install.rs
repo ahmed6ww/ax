@@ -78,6 +78,14 @@ pub async fn execute(
     };
     let replaced = table.insert(name.clone(), entry).is_some();
 
+    // Keep whatever was there so a failed reconcile does not leave the entry
+    // behind. A manifest that names something unusable is worse than no change.
+    let previous = if manifest_path.exists() {
+        Some(std::fs::read(&manifest_path)?)
+    } else {
+        None
+    };
+
     manifest.save(&manifest_path)?;
     ui::success(&format!(
         "{} {} in {}",
@@ -88,7 +96,19 @@ pub async fn execute(
 
     // Reconcile so the entry is actually on disk and in the lockfile. The
     // rail stays open: sync closes it.
-    super::sync::reconcile(assume_yes).await
+    match super::sync::reconcile(assume_yes).await {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            match previous {
+                Some(bytes) => std::fs::write(&manifest_path, bytes)?,
+                None => {
+                    std::fs::remove_file(&manifest_path).ok();
+                }
+            }
+            ui::info(&format!("{} left unchanged", ui::accent(MANIFEST_FILE)));
+            Err(err)
+        }
+    }
 }
 
 #[cfg(test)]

@@ -3,10 +3,11 @@
 use clap::Parser;
 
 use agentpm_lib::cli::{Cli, Commands};
+use agentpm_lib::core::error;
 use agentpm_lib::utils::ui;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> std::process::ExitCode {
     let cli = Cli::parse();
 
     let result = match cli.command {
@@ -31,20 +32,23 @@ async fn main() {
         }
     };
 
-    if let Err(error) = result {
-        // Render failures through the same rail as everything else, so a run
-        // that ends badly still reads as one piece rather than a bare panic
-        // trailing off the end of a half-drawn diagram.
-        let mut message = format!("{}", error);
-        for cause in error.chain().skip(1) {
-            message.push_str(&format!(
-                "
-{}",
-                ui::dim(&format!("caused by: {}", cause))
-            ));
+    match result {
+        Ok(()) => error::status(error::exit::OK),
+        Err(err) => {
+            // Render failures through the same rail as everything else, so a
+            // run that ends badly still reads as one piece rather than a bare
+            // error trailing off a half-drawn diagram.
+            let mut message = format!("{}", err);
+            for cause in err.chain().skip(1) {
+                message.push('\n');
+                message.push_str(&ui::dim(&format!("caused by: {}", cause)));
+            }
+            ui::error(&message);
+            ui::outro_cancel("Failed");
+
+            // A distinct code per failure kind, so a script can tell a drifted
+            // lockfile from an unreachable network.
+            error::status(error::exit_code_for(&err))
         }
-        ui::error(&message);
-        ui::outro_cancel("Failed");
-        std::process::exit(1);
     }
 }

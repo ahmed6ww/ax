@@ -25,7 +25,7 @@ use crate::utils::ui;
 const RESOLVE_CONCURRENCY: usize = 4;
 
 /// Exit code returned by `--check` when the tree has drifted.
-pub const DRIFT_EXIT_CODE: i32 = 2;
+pub const DRIFT_EXIT_CODE: i32 = crate::core::error::exit::DRIFT as i32;
 
 /// A skill's files, ready to write: `(relative path, bytes)`.
 type SkillPayload = (String, Vec<(String, Vec<u8>)>);
@@ -127,11 +127,11 @@ async fn run(
     offline: bool,
 ) -> Result<()> {
     let cwd = std::env::current_dir()?;
-    let manifest_path = Manifest::find(&cwd).with_context(|| {
-        format!(
-            "No {} found in this directory or any parent. Run `agentpm init` to create one.",
+    let manifest_path = Manifest::find(&cwd).ok_or_else(|| {
+        crate::core::error::Error::NotFound(format!(
+            "No {} in this directory or any parent. Run `agentpm init` to create one.",
             crate::core::manifest::MANIFEST_FILE
-        )
+        ))
     })?;
     let project_root = manifest_path.parent().unwrap_or(&cwd).to_path_buf();
 

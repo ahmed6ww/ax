@@ -223,10 +223,11 @@ impl SourceClient {
                 .and_then(|v| v.to_str().ok())
                 .unwrap_or("?");
             if remaining == "0" {
-                anyhow::bail!(
+                return Err(crate::core::error::Error::Network(format!(
                     "GitHub rate limit reached while {}. Set GITHUB_TOKEN to raise it.",
                     what
-                );
+                ))
+                .into());
             }
         }
 
@@ -348,11 +349,12 @@ impl SourceClient {
         }
 
         if files.is_empty() {
-            anyhow::bail!(
+            return Err(crate::core::error::Error::NotFound(format!(
                 "Nothing to install at '{}' in {}. Check the `path` in the manifest.",
                 prefix,
                 source.slug()
-            );
+            ))
+            .into());
         }
 
         files.sort_by(|a, b| a.0.cmp(&b.0));
@@ -427,11 +429,12 @@ impl SourceClient {
             .await?;
 
         if !listing.iter().any(|(p, _)| p == "SKILL.md") {
-            anyhow::bail!(
+            return Err(crate::core::error::Error::NotFound(format!(
                 "'{}' in {} has no SKILL.md",
                 path.trim_matches('/'),
                 source.slug()
-            );
+            ))
+            .into());
         }
 
         let prefix = path.trim_matches('/');
@@ -566,12 +569,33 @@ impl SourceClient {
             format!("{}/{}", prefix, BUNDLE_FILE)
         };
 
-        let kind = match self.fetch_raw(source, &commit, &manifest_path).await {
-            Ok(_) => SourceKind::Bundle,
-            Err(_) => SourceKind::Skill,
-        };
+        if self
+            .fetch_raw(source, &commit, &manifest_path)
+            .await
+            .is_ok()
+        {
+            return Ok((commit, SourceKind::Bundle));
+        }
 
-        Ok((commit, kind))
+        // Not a bundle. Confirm it is a skill rather than assuming: a path that
+        // holds neither used to be written into the manifest and only fail on
+        // the sync that followed, leaving a broken entry behind.
+        let skill_path = if prefix.is_empty() {
+            "SKILL.md".to_string()
+        } else {
+            format!("{}/SKILL.md", prefix)
+        };
+        if self.fetch_raw(source, &commit, &skill_path).await.is_ok() {
+            return Ok((commit, SourceKind::Skill));
+        }
+
+        Err(crate::core::error::Error::NotFound(format!(
+            "'{}' in {} holds neither {} nor SKILL.md",
+            if prefix.is_empty() { "<root>" } else { prefix },
+            source.slug(),
+            BUNDLE_FILE
+        ))
+        .into())
     }
 
     /// Resolve and download a bundle: its `BUNDLE.toml` and every file the
