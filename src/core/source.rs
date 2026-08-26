@@ -138,6 +138,13 @@ struct TreeEntry {
     size: Option<u64>,
 }
 
+/// What a source path turned out to hold.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceKind {
+    Skill,
+    Bundle,
+}
+
 /// Fetches skill content from GitHub.
 pub struct SourceClient {
     http: reqwest::Client,
@@ -466,7 +473,24 @@ impl SourceClient {
     }
 }
 
+/// The frontmatter fields the Agent Skills standard requires.
+///
+/// Unknown fields are ignored: a skill may carry `allowed-tools`, `license` and
+/// anything else the target understands, and agentpm has no business rejecting
+/// keys it does not know about.
+#[derive(Debug, Deserialize)]
+struct SkillFrontmatter {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
+}
+
 /// Check that a fetched `SKILL.md` carries the frontmatter the standard needs.
+///
+/// This runs on content fetched from an arbitrary repository, so parsing is
+/// budgeted: an adversarial document cannot expand aliases until the process
+/// runs out of memory.
 fn validate_skill_md(bytes: &[u8], path: &str, slug: &str) -> Result<()> {
     let text = std::str::from_utf8(bytes)
         .with_context(|| format!("SKILL.md in {} is not valid UTF-8", slug))?;
@@ -485,13 +509,27 @@ fn validate_skill_md(bytes: &[u8], path: &str, slug: &str) -> Result<()> {
         );
     };
 
-    let frontmatter: serde_yaml::Value = serde_yaml::from_str(rest[..end].trim())
-        .with_context(|| format!("Could not parse the frontmatter of '{}' in {}", path, slug))?;
+    let options = serde_saphyr::options! {
+        budget: serde_saphyr::budget! {
+            max_documents: 1,
+            max_anchors: 64,
+        },
+        duplicate_keys: serde_saphyr::DuplicateKeyPolicy::FirstWins,
+    };
 
-    for field in ["name", "description"] {
-        let present = frontmatter
-            .get(field)
-            .and_then(|v| v.as_str())
+    let frontmatter: SkillFrontmatter =
+        serde_saphyr::from_str_with_options(rest[..end].trim(), options)
+            .map_err(|e| anyhow::anyhow!("{}", e))
+            .with_context(|| {
+                format!("Could not parse the frontmatter of '{}' in {}", path, slug)
+            })?;
+
+    for (field, value) in [
+        ("name", &frontmatter.name),
+        ("description", &frontmatter.description),
+    ] {
+        let present = value
+            .as_deref()
             .map(|v| !v.trim().is_empty())
             .unwrap_or(false);
         if !present {
@@ -505,13 +543,6 @@ fn validate_skill_md(bytes: &[u8], path: &str, slug: &str) -> Result<()> {
     }
 
     Ok(())
-}
-
-/// What a source path turned out to hold.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SourceKind {
-    Skill,
-    Bundle,
 }
 
 impl SourceClient {

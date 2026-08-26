@@ -1,97 +1,114 @@
-#!/bin/bash
-# agentpm Installer - One-line installation script
-# Usage: curl -fsSL https://raw.githubusercontent.com/ahmed6ww/ax/main/install.sh | bash
+#!/bin/sh
+# agentpm installer
+#   curl -fsSL https://raw.githubusercontent.com/ahmed6ww/ax/main/install.sh | sh
+#
+# Downloads the release binary for this platform and verifies it against the
+# SHA256SUMS published with the release before installing. An unverifiable
+# download is discarded: this script runs with sudo, so a silent mismatch would
+# be a privileged install of an unknown file.
 
-set -e
+set -eu
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+REPO="ahmed6ww/ax"
+BIN="agentpm"
 
-echo -e "${CYAN}"
-echo "  ╔═══════════════════════════════════════╗"
-echo "  ║     agentpm - Agent Package Manager        ║"
-echo "  ║   The npm of the Agentic AI era       ║"
-echo "  ╚═══════════════════════════════════════╝"
-echo -e "${NC}"
+RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; DIM='\033[2m'; NC='\033[0m'
 
-# Detect OS and architecture
+say()  { printf '%s%s%s\n' "$CYAN" "$1" "$NC"; }
+ok()   { printf '%s%s%s\n' "$GREEN" "$1" "$NC"; }
+dim()  { printf '%s%s%s\n' "$DIM" "$1" "$NC"; }
+die()  { printf '%s%s%s\n' "$RED" "$1" "$NC" >&2; exit 1; }
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"
+}
+
+need curl
+
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
 
 case "$OS-$ARCH" in
-  linux-x86_64)   
-    BINARY="agentpm-linux-x64"
-    ;;
-  linux-aarch64)   
-    BINARY="agentpm-linux-arm64"
-    ;;
-  darwin-x86_64)  
-    BINARY="agentpm-macos-x64"
-    ;;
-  darwin-arm64)   
-    BINARY="agentpm-macos-arm64"
-    ;;
+  linux-x86_64)           ASSET="agentpm-linux-x64" ;;
+  linux-aarch64|linux-arm64) ASSET="agentpm-linux-arm64" ;;
+  darwin-x86_64)          ASSET="agentpm-macos-x64" ;;
+  darwin-arm64)           ASSET="agentpm-macos-arm64" ;;
   *)
-    echo -e "${RED}Error: Unsupported platform: $OS-$ARCH${NC}"
-    echo "Please build from source: cargo install agentpm"
+    printf '%sUnsupported platform: %s-%s%s\n' "$RED" "$OS" "$ARCH" "$NC" >&2
+    echo "On Windows, use install.ps1. Otherwise: cargo install agentpm" >&2
     exit 1
     ;;
 esac
 
-echo "→ Detected platform: $OS-$ARCH"
+say "→ Platform: $OS-$ARCH"
 
-# Get latest version
-echo "→ Fetching latest version..."
-VERSION=$(curl -sS https://api.github.com/repos/ahmed6ww/ax/releases/latest 2>/dev/null | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/' || echo "v1.3.0")
+# Resolve the latest tag. Failing closed matters: the previous version fell back
+# to a hardcoded old version, so a rate-limited API quietly installed something
+# other than what the user asked for.
+say "→ Resolving latest release"
+VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
+  | grep '"tag_name"' | head -1 | sed -E 's/.*"([^"]+)".*/\1/') || true
 
-if [ -z "$VERSION" ]; then
-  VERSION="v1.3.0"
+[ -n "${VERSION:-}" ] || die "Could not determine the latest release. Set AGENTPM_VERSION to install a specific tag."
+VERSION="${AGENTPM_VERSION:-$VERSION}"
+
+say "→ Installing $BIN $VERSION"
+
+BASE="https://github.com/$REPO/releases/download/$VERSION"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT INT TERM
+
+curl -fsSL "$BASE/$ASSET"     -o "$TMP/$ASSET"     || die "Download failed: $BASE/$ASSET"
+curl -fsSL "$BASE/SHA256SUMS" -o "$TMP/SHA256SUMS" || die "Could not fetch SHA256SUMS — refusing to install unverified."
+
+# Verify before anything is made executable or moved into place.
+say "→ Verifying checksum"
+EXPECTED=$(grep " \{1,2\}\*\{0,1\}$ASSET\$" "$TMP/SHA256SUMS" | awk '{print $1}' | head -1)
+[ -n "$EXPECTED" ] || die "$ASSET is not listed in SHA256SUMS — refusing to install."
+
+if command -v sha256sum >/dev/null 2>&1; then
+  ACTUAL=$(sha256sum "$TMP/$ASSET" | awk '{print $1}')
+elif command -v shasum >/dev/null 2>&1; then
+  ACTUAL=$(shasum -a 256 "$TMP/$ASSET" | awk '{print $1}')
+else
+  die "Neither sha256sum nor shasum is available — cannot verify the download."
 fi
 
-echo "→ Installing agentpm $VERSION..."
-
-# Download binary
-URL="https://github.com/ahmed6ww/ax/releases/download/$VERSION/$BINARY"
-TEMP_FILE=$(mktemp)
-
-if ! curl -fsSL "$URL" -o "$TEMP_FILE" 2>/dev/null; then
-  echo -e "${RED}Error: Failed to download AX${NC}"
-  echo "URL: $URL"
-  echo ""
-  echo "Try building from source instead:"
-  echo "  cargo install agentpm"
-  rm -f "$TEMP_FILE"
+if [ "$EXPECTED" != "$ACTUAL" ]; then
+  printf '%sChecksum mismatch — refusing to install.%s\n' "$RED" "$NC" >&2
+  echo "  expected $EXPECTED" >&2
+  echo "  actual   $ACTUAL" >&2
   exit 1
 fi
+ok "✓ Checksum verified"
+dim "  $ACTUAL"
 
-# Install
-chmod +x "$TEMP_FILE"
+chmod +x "$TMP/$ASSET"
 
-# Try to install to /usr/local/bin, fallback to ~/.local/bin
 if [ -w /usr/local/bin ]; then
-  mv "$TEMP_FILE" /usr/local/bin/agentpm
-  echo -e "${GREEN}✓ Installed to /usr/local/bin/agentpm${NC}"
-elif command -v sudo &> /dev/null; then
-  sudo mv "$TEMP_FILE" /usr/local/bin/agentpm
-  echo -e "${GREEN}✓ Installed to /usr/local/bin/agentpm${NC}"
+  DEST=/usr/local/bin
+  mv "$TMP/$ASSET" "$DEST/$BIN"
+elif command -v sudo >/dev/null 2>&1; then
+  DEST=/usr/local/bin
+  sudo mv "$TMP/$ASSET" "$DEST/$BIN"
 else
-  mkdir -p ~/.local/bin
-  mv "$TEMP_FILE" ~/.local/bin/agentpm
-  echo -e "${GREEN}✓ Installed to ~/.local/bin/agentpm${NC}"
-  echo ""
-  echo "Add to PATH if not already:"
-  echo '  export PATH="$HOME/.local/bin:$PATH"'
+  DEST="$HOME/.local/bin"
+  mkdir -p "$DEST"
+  mv "$TMP/$ASSET" "$DEST/$BIN"
 fi
 
-echo ""
-echo -e "${GREEN}✅ agentpm installed successfully!${NC}"
-echo ""
-echo "Get started:"
-echo "  agentpm init                          # Initialize AX"
-echo "  agentpm list                          # Browse available agents"
-echo "  agentpm install rust-architect        # Install an agent"
-echo ""
-echo -e "${CYAN}Learn more: https://github.com/ahmed6ww/ax${NC}"
+ok "✓ Installed to $DEST/$BIN"
+
+case ":$PATH:" in
+  *":$DEST:"*) ;;
+  *) echo; dim "$DEST is not on your PATH. Add it:"; echo "  export PATH=\"$DEST:\$PATH\"" ;;
+esac
+
+echo
+ok "agentpm $VERSION installed"
+echo
+echo "  agentpm init                                    set up this project"
+echo "  agentpm install vercel-labs/skills#skills/find-skills"
+echo "  agentpm sync                                    install what the manifest declares"
+echo
+dim "Verify what it authorised to run:  agentpm audit"
