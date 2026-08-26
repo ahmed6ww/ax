@@ -236,6 +236,7 @@ impl SourceClient {
         source: &GitHubSource,
         commit: &str,
         path: &str,
+        keep: &dyn Fn(&str) -> bool,
     ) -> Result<Vec<(String, u64)>> {
         let url = format!(
             "https://api.github.com/repos/{}/{}/git/trees/{}?recursive=1",
@@ -275,12 +276,7 @@ impl SourceClient {
             let Some(relative) = strip_dir_prefix(&entry.path, prefix) else {
                 continue;
             };
-            // Only the skill's own surface. Nothing else in the repo is installed.
-            let keep = relative == "SKILL.md"
-                || relative.starts_with("scripts/")
-                || relative.starts_with("references/")
-                || relative.starts_with("assets/");
-            if !keep {
+            if !keep(relative) {
                 continue;
             }
 
@@ -300,13 +296,10 @@ impl SourceClient {
 
         if files.is_empty() {
             anyhow::bail!(
-                "No SKILL.md found at '{}' in {}. Check the `path` in the manifest.",
+                "Nothing to install at '{}' in {}. Check the `path` in the manifest.",
                 prefix,
                 source.slug()
             );
-        }
-        if !files.iter().any(|(p, _)| p == "SKILL.md") {
-            anyhow::bail!("'{}' in {} has no SKILL.md", prefix, source.slug());
         }
 
         files.sort_by(|a, b| a.0.cmp(&b.0));
@@ -362,7 +355,23 @@ impl SourceClient {
             None => self.resolve_commit(source, rev).await?,
         };
 
-        let listing = self.list_files(source, &commit, path).await?;
+        let listing = self
+            .list_files(source, &commit, path, &|relative: &str| {
+                relative == "SKILL.md"
+                    || relative.starts_with("scripts/")
+                    || relative.starts_with("references/")
+                    || relative.starts_with("assets/")
+            })
+            .await?;
+
+        if !listing.iter().any(|(p, _)| p == "SKILL.md") {
+            anyhow::bail!(
+                "'{}' in {} has no SKILL.md",
+                path.trim_matches('/'),
+                source.slug()
+            );
+        }
+
         let prefix = path.trim_matches('/');
 
         let commit_ref = commit.as_str();
@@ -392,6 +401,123 @@ impl SourceClient {
             resolved: commit,
             files,
         })
+    }
+}
+
+impl SourceClient {
+    /// Resolve and download a bundle: its `BUNDLE.toml` and every file the
+    /// manifest names.
+    pub async fn fetch_bundle(
+        &self,
+        source: &GitHubSource,
+        path: &str,
+        rev: Option<&str>,
+        pinned: Option<&str>,
+    ) -> Result<(crate::core::bundle::BundleManifest, ResolvedSkill)> {
+        use crate::core::bundle::BUNDLE_FILE;
+
+        let commit = match pinned {
+            Some(sha) => sha.to_string(),
+            None => self.resolve_commit(source, rev).await?,
+        };
+        let prefix = path.trim_matches('/');
+
+        // Read the manifest first; it declares exactly which files to pull, so
+        // nothing is guessed and nothing unrelated to the bundle is installed.
+        let manifest_path = if prefix.is_empty() {
+            BUNDLE_FILE.to_string()
+        } else {
+            format!("{}/{}", prefix, BUNDLE_FILE)
+        };
+        let manifest_bytes = self
+            .fetch_raw(source, &commit, &manifest_path)
+            .await
+            .with_context(|| format!("No {} at '{}' in {}", BUNDLE_FILE, prefix, source.slug()))?;
+        let manifest = crate::core::bundle::BundleManifest::parse(
+            std::str::from_utf8(&manifest_bytes).context("BUNDLE.toml is not valid UTF-8")?,
+        )?;
+
+        // Skill entries are directories; the rest are individual files.
+        let declared_dirs: Vec<String> = manifest.skills.clone();
+        let declared_files: Vec<String> = manifest
+            .agents
+            .iter()
+            .chain(&manifest.commands)
+            .chain(&manifest.scripts)
+            .cloned()
+            .collect();
+
+        let listing = self
+            .list_files(source, &commit, path, &|relative: &str| {
+                declared_files.iter().any(|f| f == relative)
+                    || declared_dirs
+                        .iter()
+                        .any(|d| relative.starts_with(&format!("{}/", d)))
+            })
+            .await?;
+
+        for declared in &declared_files {
+            if !listing.iter().any(|(p, _)| p == declared) {
+                anyhow::bail!(
+                    "Bundle '{}' declares '{}' but the file is not in the repository",
+                    manifest.name,
+                    declared
+                );
+            }
+        }
+        for dir in &declared_dirs {
+            let skill_md = format!("{}/SKILL.md", dir);
+            if !listing.iter().any(|(p, _)| *p == skill_md) {
+                anyhow::bail!(
+                    "Bundle '{}' declares skill '{}' but there is no {}",
+                    manifest.name,
+                    dir,
+                    skill_md
+                );
+            }
+        }
+
+        let mut files = self.download_all(source, &commit, prefix, listing).await?;
+        files.push(FetchedFile {
+            path: BUNDLE_FILE.to_string(),
+            bytes: manifest_bytes,
+        });
+        files.sort_by(|a, b| a.path.cmp(&b.path));
+
+        Ok((
+            manifest,
+            ResolvedSkill {
+                source: source.slug(),
+                source_url: source.clone_url(),
+                path: prefix.to_string(),
+                resolved: commit,
+                files,
+            },
+        ))
+    }
+
+    async fn download_all(
+        &self,
+        source: &GitHubSource,
+        commit: &str,
+        prefix: &str,
+        listing: Vec<(String, u64)>,
+    ) -> Result<Vec<FetchedFile>> {
+        futures::stream::iter(listing.into_iter().map(|(relative, _)| async move {
+            let full = if prefix.is_empty() {
+                relative.clone()
+            } else {
+                format!("{}/{}", prefix, relative)
+            };
+            let bytes = self.fetch_raw(source, commit, &full).await?;
+            Ok::<_, anyhow::Error>(FetchedFile {
+                path: relative,
+                bytes,
+            })
+        }))
+        .buffer_unordered(FETCH_CONCURRENCY)
+        .try_collect()
+        .await
     }
 }
 

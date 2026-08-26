@@ -61,6 +61,12 @@ impl Installer for CodexInstaller {
             skills: true,
             mcp: true,
             project_scope: true,
+            // Codex has no subagent, slash command, hook or permission
+            // surface. Declaring that here is what makes sync report these as
+            // skipped instead of appearing to install them.
+            commands: false,
+            hooks: false,
+            permissions: false,
         }
     }
 

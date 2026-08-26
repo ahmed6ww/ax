@@ -26,6 +26,11 @@ pub struct Manifest {
     #[serde(default)]
     pub skills: BTreeMap<String, SkillSpec>,
 
+    /// Bundles this project requires. A bundle brings skills, subagents,
+    /// commands, MCP servers, hooks and permissions as one pinned unit.
+    #[serde(default)]
+    pub bundles: BTreeMap<String, SkillSpec>,
+
     /// MCP servers this project requires.
     #[serde(default)]
     pub mcp: BTreeMap<String, McpSpec>,
@@ -207,12 +212,13 @@ impl Manifest {
                 scope: default_scope(),
             },
             skills: BTreeMap::new(),
+            bundles: BTreeMap::new(),
             mcp: BTreeMap::new(),
         }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.skills.is_empty() && self.mcp.is_empty()
+        self.skills.is_empty() && self.mcp.is_empty() && self.bundles.is_empty()
     }
 }
 

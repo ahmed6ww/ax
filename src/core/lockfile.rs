@@ -27,9 +27,45 @@ pub struct Lockfile {
     #[serde(default, rename = "skill")]
     pub skills: Vec<LockedSkill>,
 
+    /// Resolved bundles.
+    #[serde(default, rename = "bundle")]
+    pub bundles: Vec<LockedBundle>,
+
     /// Resolved MCP servers.
     #[serde(default, rename = "mcp")]
     pub mcp: Vec<LockedMcp>,
+}
+
+/// A resolved bundle, and what it contributed to each target's settings.
+///
+/// The contribution is recorded so the next sync removes exactly these entries
+/// before applying the current set. Without it, merging into a shared
+/// `settings.json` would either grow the file on every run or require agentpm
+/// to guess which rules are its own.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LockedBundle {
+    pub name: String,
+    pub source: String,
+    pub source_url: String,
+    pub path: String,
+    pub resolved: String,
+    pub digest: String,
+    pub targets: Vec<String>,
+
+    /// Permission rules this bundle added.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub permissions_allow: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub permissions_deny: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub permissions_ask: Vec<String>,
+
+    /// Resolved hook script paths this bundle installed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hook_commands: Vec<String>,
+
+    #[serde(default, rename = "file")]
+    pub files: Vec<LockedFile>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -78,6 +114,7 @@ impl Lockfile {
         Self {
             version: LOCK_VERSION,
             skills: Vec::new(),
+            bundles: Vec::new(),
             mcp: Vec::new(),
         }
     }
@@ -118,8 +155,17 @@ impl Lockfile {
         crate::installers::common::write_atomic(path, (header + &rendered).as_bytes())
     }
 
+    pub fn bundle(&self, name: &str) -> Option<&LockedBundle> {
+        self.bundles.iter().find(|b| b.name == name)
+    }
+
     fn sort(&mut self) {
         self.skills.sort_by(|a, b| a.name.cmp(&b.name));
+        self.bundles.sort_by(|a, b| a.name.cmp(&b.name));
+        for bundle in &mut self.bundles {
+            bundle.files.sort_by(|a, b| a.path.cmp(&b.path));
+            bundle.targets.sort();
+        }
         for skill in &mut self.skills {
             skill.files.sort_by(|a, b| a.path.cmp(&b.path));
             skill.targets.sort();
@@ -155,6 +201,26 @@ impl Lockfile {
         for have in &self.skills {
             if other.skill(&have.name).is_none() {
                 drift.push(Drift::Removed(have.name.clone()));
+            }
+        }
+
+        for want in &other.bundles {
+            match self.bundle(&want.name) {
+                None => drift.push(Drift::Added(format!("bundle:{}", want.name))),
+                Some(have) if have.digest != want.digest => {
+                    drift.push(Drift::Changed {
+                        name: format!("bundle:{}", want.name),
+                        from: have.resolved.clone(),
+                        to: want.resolved.clone(),
+                    });
+                }
+                Some(_) => {}
+            }
+        }
+
+        for have in &self.bundles {
+            if other.bundle(&have.name).is_none() {
+                drift.push(Drift::Removed(format!("bundle:{}", have.name)));
             }
         }
 

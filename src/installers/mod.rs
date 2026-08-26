@@ -15,7 +15,26 @@ pub use claude::ClaudeInstaller;
 pub use codex::CodexInstaller;
 
 use crate::core::agent::AgentConfig;
+use crate::core::bundle::{Hook, Permissions};
 use crate::utils::paths::Scope;
+
+/// What agentpm has written into a target's settings file.
+///
+/// Recorded in the lockfile so a later sync removes exactly these entries
+/// rather than merging blindly and growing the file, and so uninstall can undo
+/// them without touching anything the user added by hand.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SettingsContribution {
+    pub permissions: Permissions,
+    /// `(hook, resolved command path)` pairs.
+    pub hooks: Vec<(Hook, String)>,
+}
+
+impl SettingsContribution {
+    pub fn is_empty(&self) -> bool {
+        self.permissions.is_empty() && self.hooks.is_empty()
+    }
+}
 
 /// Target editor for installation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,6 +78,36 @@ pub struct Capabilities {
     pub mcp: bool,
     /// Installation into a project directory as well as the user's home.
     pub project_scope: bool,
+    /// Slash commands.
+    pub commands: bool,
+    /// Lifecycle hooks.
+    pub hooks: bool,
+    /// Tool permission rules.
+    pub permissions: bool,
+}
+
+impl Capabilities {
+    /// Parts of a bundle this target cannot take, for honest reporting.
+    pub fn unsupported(&self, bundle: &crate::core::bundle::BundleManifest) -> Vec<String> {
+        let mut skipped = Vec::new();
+        let mut note = |supported: bool, n: usize, label: &str| {
+            if !supported && n > 0 {
+                skipped.push(format!("{} {}{}", n, label, if n == 1 { "" } else { "s" }));
+            }
+        };
+        note(self.subagents, bundle.agents.len(), "subagent");
+        note(self.commands, bundle.commands.len(), "command");
+        note(self.hooks, bundle.hooks.len(), "hook");
+        note(self.mcp, bundle.mcp.len(), "MCP server");
+        note(
+            self.permissions,
+            bundle.permissions.allow.len()
+                + bundle.permissions.deny.len()
+                + bundle.permissions.ask.len(),
+            "permission rule",
+        );
+        skipped
+    }
 }
 
 /// Installer trait — the adapter for a target editor.
@@ -96,6 +145,43 @@ pub trait Installer: Send + Sync {
 
     /// Configure MCP servers.
     fn install_mcp(&self, tools: &[crate::core::agent::McpTool]) -> Result<()>;
+
+    /// Install a subagent file verbatim.
+    ///
+    /// Only called when `capabilities().subagents` is true.
+    fn install_subagent(&self, _name: &str, _contents: &[u8]) -> Result<()> {
+        Ok(())
+    }
+
+    /// Install a slash command file verbatim.
+    ///
+    /// Only called when `capabilities().commands` is true.
+    fn install_command(&self, _name: &str, _contents: &[u8]) -> Result<()> {
+        Ok(())
+    }
+
+    /// Stage a bundle's own files (hook scripts) and return the directory.
+    fn stage_bundle_files(
+        &self,
+        _bundle: &str,
+        _files: &[(String, Vec<u8>)],
+    ) -> Result<Option<PathBuf>> {
+        Ok(None)
+    }
+
+    /// Merge hooks and permissions into the target's settings.
+    ///
+    /// `previous` names what a prior sync contributed, so those entries are
+    /// removed before the current set is applied and the file does not grow on
+    /// every run. Only called when `capabilities().hooks` or
+    /// `capabilities().permissions` is true.
+    fn apply_settings(
+        &self,
+        _contribution: &SettingsContribution,
+        _previous: &SettingsContribution,
+    ) -> Result<()> {
+        Ok(())
+    }
 
     /// Install the agent's MCP servers.
     ///
