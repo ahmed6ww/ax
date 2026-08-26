@@ -8,7 +8,7 @@ pub mod uninstall;
 
 use anyhow::Result;
 
-use crate::core::agent::AgentConfig;
+use crate::core::agent::McpTool;
 use crate::utils::ui;
 
 /// Prompt for any API key an MCP server declares via `setup_url`.
@@ -16,8 +16,8 @@ use crate::utils::ui;
 /// Only the placeholder whose value is a `${...}` reference is replaced, so one
 /// key cannot be sprayed into unrelated environment variables. Input is masked,
 /// because an echoed key ends up in scrollback and screen recordings.
-pub fn prompt_for_api_keys(mut agent: AgentConfig) -> Result<AgentConfig> {
-    for tool in &mut agent.mcp {
+pub fn prompt_for_api_keys(tools: &mut [McpTool]) -> Result<()> {
+    for tool in tools.iter_mut() {
         let Some(url) = tool.setup_url.clone() else {
             continue;
         };
@@ -62,5 +62,5 @@ pub fn prompt_for_api_keys(mut agent: AgentConfig) -> Result<AgentConfig> {
         }
     }
 
-    Ok(agent)
+    Ok(())
 }

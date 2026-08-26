@@ -109,6 +109,16 @@ impl Plan {
 }
 
 pub async fn execute(check: bool, update: bool) -> Result<()> {
+    run(check, update, true).await
+}
+
+/// Reconcile as a continuation of another command, without opening a second
+/// rail. `install` and `uninstall` announce themselves and then hand over.
+pub(crate) async fn reconcile() -> Result<()> {
+    run(false, false, false).await
+}
+
+async fn run(check: bool, update: bool, announce: bool) -> Result<()> {
     let cwd = std::env::current_dir()?;
     let manifest_path = Manifest::find(&cwd).with_context(|| {
         format!(
@@ -121,11 +131,13 @@ pub async fn execute(check: bool, update: bool) -> Result<()> {
     let manifest = Manifest::load(&manifest_path)?;
     let (targets, scope) = manifest.targets.resolve()?;
 
-    ui::intro(if check {
-        "agentpm check"
-    } else {
-        "agentpm sync"
-    });
+    if announce {
+        ui::intro(if check {
+            "agentpm check"
+        } else {
+            "agentpm sync"
+        });
+    }
 
     ui::step(&format!(
         "{}\n{}  {}  {} scope",
@@ -145,25 +157,67 @@ pub async fn execute(check: bool, update: bool) -> Result<()> {
         scope.display_name()
     ));
 
-    if manifest.is_empty() {
-        ui::warning("Nothing declared yet");
-        ui::note(
-            "Add a skill",
-            &format!(
-                "[skills]\nfind-skills = {{ source = \"vercel-labs/skills\", path = \"skills/find-skills\" }}\n\nthen run agentpm sync again ({})",
-                crate::core::manifest::MANIFEST_FILE
-            ),
-        );
-        ui::outro("Nothing to do");
-        return Ok(());
-    }
-
     let lock_path = Lockfile::path_for(&project_root);
     let existing = if lock_path.exists() {
         Some(Lockfile::load(&lock_path)?)
     } else {
         None
     };
+
+    if manifest.is_empty() {
+        // An empty manifest still has work to do when the lockfile records
+        // something installed: removing the last entry has to take its files
+        // with it. Returning early here left them on disk.
+        let names: Vec<String> = existing
+            .as_ref()
+            .map(|l| {
+                l.skills
+                    .iter()
+                    .map(|s| s.name.clone())
+                    .chain(l.bundles.iter().map(|b| b.name.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        if !names.is_empty() && !check {
+            for target in &targets {
+                let installer = get_installer(*target, scope);
+                let mut pruned = 0usize;
+                for name in &names {
+                    if installer.remove_skill(name)? {
+                        pruned += 1;
+                    }
+                }
+                // A bundle's settings contributions have to come back out too.
+                let previous = previous_contribution(existing.as_ref(), *target);
+                if !previous.is_empty() {
+                    installer.apply_settings(&SettingsContribution::default(), &previous)?;
+                }
+                ui::success(&format!(
+                    "{}   {}\n{} {} removed",
+                    ui::bold(target.display_name()),
+                    ui::dim(&installer.location()),
+                    ui::dim("-"),
+                    plural(pruned, "skill")
+                ));
+            }
+
+            Lockfile::new().save(&lock_path)?;
+            ui::outro("Nothing declared - everything removed");
+            return Ok(());
+        }
+
+        ui::warning("Nothing declared yet");
+        ui::note(
+            "Add a skill",
+            &format!(
+                "agentpm install vercel-labs/skills#skills/find-skills\n\nor edit {} by hand",
+                crate::core::manifest::MANIFEST_FILE
+            ),
+        );
+        ui::outro("Nothing to do");
+        return Ok(());
+    }
 
     if check && existing.is_none() {
         ui::outro_cancel("Nothing to check against");
@@ -449,6 +503,28 @@ pub async fn execute(check: bool, update: bool) -> Result<()> {
         std::process::exit(DRIFT_EXIT_CODE);
     }
 
+    // ---- prune what the manifest no longer declares -----------------------
+    //
+    // A skill removed from agentpm.toml has to leave the disk too, or the
+    // agent keeps loading something the project dropped.
+    let stale: Vec<String> = existing
+        .as_ref()
+        .map(|prev| {
+            let mut names: Vec<String> = prev
+                .skills
+                .iter()
+                .filter(|s| resolved_lock.skill(&s.name).is_none())
+                .map(|s| s.name.clone())
+                .collect();
+            for bundle in &prev.bundles {
+                if resolved_lock.bundle(&bundle.name).is_none() {
+                    names.push(bundle.name.clone());
+                }
+            }
+            names
+        })
+        .unwrap_or_default();
+
     // ---- install ----------------------------------------------------------
     for target in &targets {
         let installer = get_installer(*target, scope);
@@ -578,6 +654,20 @@ pub async fn execute(check: bool, update: bool) -> Result<()> {
                     plural(rules, "permission rule")
                 ));
             }
+        }
+
+        let mut pruned = 0usize;
+        for name in &stale {
+            if installer.remove_skill(name)? {
+                pruned += 1;
+            }
+        }
+        if pruned > 0 {
+            lines.push(format!(
+                "{} {} removed",
+                ui::dim("−"),
+                plural(pruned, "skill")
+            ));
         }
 
         // Anything this target cannot take is named, never silently dropped.

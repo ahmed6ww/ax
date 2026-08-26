@@ -14,7 +14,6 @@ use std::path::PathBuf;
 pub use claude::ClaudeInstaller;
 pub use codex::CodexInstaller;
 
-use crate::core::agent::AgentConfig;
 use crate::core::bundle::{Hook, Permissions};
 use crate::utils::paths::Scope;
 
@@ -115,16 +114,8 @@ pub trait Installer: Send + Sync {
     /// What this target supports.
     fn capabilities(&self) -> Capabilities;
 
-    /// Install the agent's identity (system prompt) as a subagent.
-    ///
-    /// Only called when `capabilities().subagents` is true.
-    fn install_identity(&self, agent: &AgentConfig) -> Result<()>;
-
     /// Where this target discovers skills, for the configured scope.
     fn skills_root(&self) -> Result<PathBuf>;
-
-    /// Install the agent's skills.
-    fn install_skills(&self, agent: &AgentConfig) -> Result<()>;
 
     /// Install already-fetched files verbatim under `skill_name`.
     ///
@@ -183,15 +174,22 @@ pub trait Installer: Send + Sync {
         Ok(())
     }
 
-    /// Install the agent's MCP servers.
-    ///
-    /// Only called when `capabilities().mcp` is true.
-    fn install_tools(&self, agent: &AgentConfig) -> Result<()> {
-        self.install_mcp(&agent.mcp)
-    }
-
     /// Remove an agent by name.
     fn uninstall(&self, agent_name: &str) -> Result<()>;
+
+    /// Remove a single installed skill directory.
+    ///
+    /// Used to prune what a manifest no longer declares; without it, deleting
+    /// an entry from the manifest left the files on disk and the agent kept
+    /// loading a skill the project had dropped.
+    fn remove_skill(&self, name: &str) -> Result<bool> {
+        let dir = common::skill_dir(&self.skills_root()?, name)?;
+        if dir.exists() {
+            std::fs::remove_dir_all(&dir)?;
+            return Ok(true);
+        }
+        Ok(false)
+    }
 
     /// Human-readable description of where this installer writes.
     fn location(&self) -> String;

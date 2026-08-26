@@ -13,11 +13,11 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use agentpm_lib::core::agent::{AgentConfig, Identity, McpTool, Skill};
+use agentpm_lib::core::agent::McpTool;
 use agentpm_lib::installers::{get_installer, Target};
 use agentpm_lib::utils::paths::Scope;
 
-/// Run `f` with HOME and the working directory pointed at a temp project.
+/// Run `f` with the home directory and working directory pointed at a sandbox.
 ///
 /// Serialized because both are process-global.
 fn in_temp_project<F: FnOnce(&Path, &Path)>(f: F) {
@@ -30,11 +30,12 @@ fn in_temp_project<F: FnOnce(&Path, &Path)>(f: F) {
     fs::create_dir_all(project.join(".git")).unwrap();
 
     let prev_cwd = std::env::current_dir().unwrap();
-    let prev_ax_home = std::env::var_os("AGENTPM_HOME");
+    let prev_home = std::env::var_os("AGENTPM_HOME");
     let prev_claude_dir = std::env::var_os("CLAUDE_CONFIG_DIR");
 
-    // AGENTPM_HOME, not HOME: dirs::home_dir() ignores HOME on Windows, so an
-    // earlier version of this harness wrote into the real home directory.
+    // AGENTPM_HOME, not HOME: dirs::home_dir() ignores HOME on Windows, and an
+    // earlier version of this harness wrote into the real ~/.claude and
+    // ~/.codex as a result.
     std::env::set_var("AGENTPM_HOME", home.path());
     std::env::remove_var("CLAUDE_CONFIG_DIR");
     std::env::set_current_dir(&project).unwrap();
@@ -43,7 +44,7 @@ fn in_temp_project<F: FnOnce(&Path, &Path)>(f: F) {
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&project, home.path())));
 
     std::env::set_current_dir(prev_cwd).ok();
-    match prev_ax_home {
+    match prev_home {
         Some(v) => std::env::set_var("AGENTPM_HOME", v),
         None => std::env::remove_var("AGENTPM_HOME"),
     }
@@ -56,58 +57,50 @@ fn in_temp_project<F: FnOnce(&Path, &Path)>(f: F) {
     }
 }
 
-fn sample_agent() -> AgentConfig {
-    AgentConfig {
-        name: "rust-architect".to_string(),
-        version: "1.0.0".to_string(),
-        description: "Senior Rust systems engineer".to_string(),
-        author: "ahmed6ww".to_string(),
-        identity: Identity {
-            model: Some("claude-3-5-sonnet-latest".to_string()),
-            icon: Some("🦀".to_string()),
-            system_prompt: "You are a Rust expert.".to_string(),
-        },
-        skills: vec![Skill {
-            name: "tokio-patterns".to_string(),
-            description: Some("Async patterns for Tokio".to_string()),
-            content: "# Tokio\n\nUse JoinSet.".to_string(),
-            ..Default::default()
-        }],
-        mcp: vec![McpTool {
-            name: "context7".to_string(),
-            command: "npx".to_string(),
-            args: vec!["-y".to_string(), "@upstash/context7-mcp".to_string()],
-            env: HashMap::new(),
-            setup_url: None,
-        }],
+fn skill_files() -> Vec<(String, Vec<u8>)> {
+    vec![
+        (
+            "SKILL.md".to_string(),
+            b"---\nname: tokio-patterns\ndescription: Async patterns\n---\n\nUse JoinSet.".to_vec(),
+        ),
+        ("references/notes.md".to_string(), b"# Notes\n".to_vec()),
+    ]
+}
+
+fn context7() -> McpTool {
+    McpTool {
+        name: "context7".to_string(),
+        command: "npx".to_string(),
+        args: vec!["-y".to_string(), "@upstash/context7-mcp".to_string()],
+        env: HashMap::new(),
+        setup_url: None,
     }
 }
 
 #[test]
 fn claude_project_scope_matches_documented_layout() {
     in_temp_project(|project, _home| {
-        let agent = sample_agent();
         let installer = get_installer(Target::Claude, Scope::Project);
-        installer.install_identity(&agent).unwrap();
-        installer.install_skills(&agent).unwrap();
-        installer.install_tools(&agent).unwrap();
+        installer
+            .install_files("tokio-patterns", &skill_files())
+            .unwrap();
+        installer
+            .install_subagent("api-reviewer", b"---\nname: api-reviewer\n---\nReview.")
+            .unwrap();
+        installer.install_mcp(&[context7()]).unwrap();
 
-        // Documented: .claude/skills/<name>/SKILL.md
+        // Documented: .claude/skills/<name>/SKILL.md, with supporting files.
         let skill = project.join(".claude/skills/tokio-patterns/SKILL.md");
         assert!(skill.is_file(), "missing {}", skill.display());
-        let body = fs::read_to_string(&skill).unwrap();
-        assert!(body.starts_with("---\n"));
-        assert!(body.contains("name: tokio-patterns"));
-        assert!(body.contains("description: Async patterns for Tokio"));
+        assert!(fs::read_to_string(&skill).unwrap().contains("Use JoinSet."));
+        assert!(project
+            .join(".claude/skills/tokio-patterns/references/notes.md")
+            .is_file());
 
         // Documented: .claude/agents/<name>.md
-        let subagent = project.join(".claude/agents/rust-architect.md");
-        assert!(subagent.is_file(), "missing {}", subagent.display());
-        assert!(fs::read_to_string(&subagent)
-            .unwrap()
-            .contains("model: sonnet"));
+        assert!(project.join(".claude/agents/api-reviewer.md").is_file());
 
-        // Documented: .mcp.json at the project root, shared via version control
+        // Documented: .mcp.json at the project root, shared via version control.
         let mcp = project.join(".mcp.json");
         assert!(mcp.is_file(), "missing {}", mcp.display());
         let value: serde_json::Value =
@@ -119,9 +112,10 @@ fn claude_project_scope_matches_documented_layout() {
 #[test]
 fn claude_user_scope_uses_dot_claude_in_home() {
     in_temp_project(|_project, home| {
-        let agent = sample_agent();
         let installer = get_installer(Target::Claude, Scope::User);
-        installer.install_skills(&agent).unwrap();
+        installer
+            .install_files("tokio-patterns", &skill_files())
+            .unwrap();
 
         // ~/.claude/skills on every platform — never Application Support or %APPDATA%.
         assert!(home
@@ -129,7 +123,7 @@ fn claude_user_scope_uses_dot_claude_in_home() {
             .is_file());
         assert!(
             !home.join("Library").exists(),
-            "wrote to a Desktop-style path"
+            "wrote to a Claude Desktop path"
         );
         assert!(!home.join(".claude/skills/synced").exists());
     });
@@ -138,10 +132,11 @@ fn claude_user_scope_uses_dot_claude_in_home() {
 #[test]
 fn codex_writes_to_dot_agents_not_dot_codex() {
     in_temp_project(|project, home| {
-        let agent = sample_agent();
         let installer = get_installer(Target::Codex, Scope::Project);
-        installer.install_skills(&agent).unwrap();
-        installer.install_tools(&agent).unwrap();
+        installer
+            .install_files("tokio-patterns", &skill_files())
+            .unwrap();
+        installer.install_mcp(&[context7()]).unwrap();
 
         // Documented: .agents/skills/<name>/SKILL.md
         assert!(project
@@ -153,13 +148,6 @@ fn codex_writes_to_dot_agents_not_dot_codex() {
             !home.join(".codex/skills").exists(),
             "wrote skills to a directory Codex never reads"
         );
-
-        // Codex has no subagent concept, so the identity ships as a skill.
-        let identity = project.join(".agents/skills/rust-architect-identity/SKILL.md");
-        assert!(identity.is_file(), "identity was dropped");
-        assert!(fs::read_to_string(&identity)
-            .unwrap()
-            .contains("You are a Rust expert."));
 
         // MCP still belongs in ~/.codex/config.toml.
         let cfg = home.join(".codex/config.toml");
@@ -175,13 +163,14 @@ fn codex_writes_to_dot_agents_not_dot_codex() {
 #[test]
 fn codex_config_survives_a_hostile_command_string() {
     in_temp_project(|_project, home| {
-        let mut agent = sample_agent();
+        let mut tool = context7();
         // Under the previous string-concatenation writer this escaped the TOML
         // string and injected an extra server table.
-        agent.mcp[0].command = "npx\"\n[mcp_servers.injected]\ncommand = \"rm".to_string();
+        tool.command = "npx\"\n[mcp_servers.injected]\ncommand = \"rm".to_string();
 
-        let installer = get_installer(Target::Codex, Scope::User);
-        installer.install_tools(&agent).unwrap();
+        get_installer(Target::Codex, Scope::User)
+            .install_mcp(&[tool])
+            .unwrap();
 
         let cfg = home.join(".codex/config.toml");
         let doc: toml::Table = fs::read_to_string(&cfg).unwrap().parse().unwrap();
@@ -195,20 +184,26 @@ fn codex_config_survives_a_hostile_command_string() {
 }
 
 #[test]
-fn a_traversing_skill_name_is_refused() {
+fn a_traversing_name_is_refused_by_every_target() {
     in_temp_project(|project, _home| {
-        let mut agent = sample_agent();
-        agent.skills[0].name = "../../../../pwned".to_string();
-
         for target in Target::all() {
             let installer = get_installer(target, Scope::Project);
             assert!(
-                installer.install_skills(&agent).is_err(),
-                "{} accepted a traversing skill name",
+                installer
+                    .install_files("../../../../pwned", &skill_files())
+                    .is_err(),
+                "{} accepted a traversing name",
+                target.display_name()
+            );
+            // A traversing path inside the payload must be refused too.
+            assert!(
+                installer
+                    .install_files("ok", &[("../../escape.md".to_string(), b"x".to_vec())])
+                    .is_err(),
+                "{} accepted a traversing file path",
                 target.display_name()
             );
         }
-
         assert!(!project.join("../../../../pwned").exists());
     });
 }
@@ -219,28 +214,56 @@ fn a_corrupt_existing_config_is_never_silently_replaced() {
         let mcp = project.join(".mcp.json");
         fs::write(&mcp, "{ this is not json").unwrap();
 
-        let installer = get_installer(Target::Claude, Scope::Project);
-        let err = installer.install_tools(&sample_agent()).unwrap_err();
+        let err = get_installer(Target::Claude, Scope::Project)
+            .install_mcp(&[context7()])
+            .unwrap_err();
         assert!(format!("{:#}", err).contains("not valid JSON"));
 
-        // The user's file is untouched rather than reset to {}.
+        // The user's file is untouched rather than reset to an empty object.
         assert_eq!(fs::read_to_string(&mcp).unwrap(), "{ this is not json");
     });
 }
 
 #[test]
-fn uninstall_removes_exactly_what_install_wrote() {
+fn pruning_removes_a_skill_the_manifest_dropped() {
     in_temp_project(|project, _home| {
-        let agent = sample_agent();
-
         for target in Target::all() {
             let installer = get_installer(target, Scope::Project);
-            installer.install_skills(&agent).unwrap();
-            installer.uninstall(&agent.name).unwrap();
+            installer
+                .install_files("tokio-patterns", &skill_files())
+                .unwrap();
+
+            assert!(installer.remove_skill("tokio-patterns").unwrap());
+            // Removing something already gone is not an error.
+            assert!(!installer.remove_skill("tokio-patterns").unwrap());
         }
 
-        assert!(!project
-            .join(".agents/skills/rust-architect-identity")
-            .exists());
+        assert!(!project.join(".claude/skills/tokio-patterns").exists());
+        assert!(!project.join(".agents/skills/tokio-patterns").exists());
+    });
+}
+
+#[test]
+fn a_traversing_path_inside_a_bundle_stage_is_refused() {
+    in_temp_project(|project, _home| {
+        let installer = get_installer(Target::Claude, Scope::Project);
+        assert!(installer
+            .stage_bundle_files("b", &[("../../../out.sh".to_string(), b"x".to_vec())])
+            .is_err());
+        assert!(!project.join("../../../out.sh").exists());
+    });
+}
+
+#[test]
+fn removing_a_skill_leaves_its_siblings_alone() {
+    in_temp_project(|project, _home| {
+        let installer = get_installer(Target::Claude, Scope::Project);
+        installer.install_files("keep-me", &skill_files()).unwrap();
+        installer.install_files("drop-me", &skill_files()).unwrap();
+
+        assert!(installer.remove_skill("drop-me").unwrap());
+
+        assert!(project.join(".claude/skills/keep-me/SKILL.md").is_file());
+        assert!(!project.join(".claude/skills/drop-me").exists());
     });
 }

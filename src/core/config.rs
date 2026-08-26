@@ -12,17 +12,9 @@ pub struct Config {
     /// Default target for installations (claude, cursor)
     pub default_target: String,
 
-    /// Registry URL (defaults to GitHub)
-    #[serde(default = "default_registry_url")]
-    pub registry_url: String,
-
     /// Whether to show verbose output
     #[serde(default)]
     pub verbose: bool,
-}
-
-fn default_registry_url() -> String {
-    "https://raw.githubusercontent.com/ahmed6ww/ax-agents/main".to_string()
 }
 
 impl Config {
@@ -30,7 +22,6 @@ impl Config {
     pub fn new(default_target: String) -> Self {
         Self {
             default_target,
-            registry_url: default_registry_url(),
             verbose: false,
         }
     }

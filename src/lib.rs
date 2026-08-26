@@ -7,7 +7,5 @@ pub mod core;
 pub mod installers;
 pub mod utils;
 
-pub use core::agent::AgentConfig;
 pub use core::config::Config;
-pub use core::registry::Registry;
 pub use installers::{get_installer, Capabilities, Installer, Target};

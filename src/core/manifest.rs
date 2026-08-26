@@ -23,16 +23,16 @@ pub struct Manifest {
     pub targets: Targets,
 
     /// Skills this project requires, keyed by the name they install under.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub skills: BTreeMap<String, SkillSpec>,
 
     /// Bundles this project requires. A bundle brings skills, subagents,
     /// commands, MCP servers, hooks and permissions as one pinned unit.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub bundles: BTreeMap<String, SkillSpec>,
 
     /// MCP servers this project requires.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub mcp: BTreeMap<String, McpSpec>,
 }
 

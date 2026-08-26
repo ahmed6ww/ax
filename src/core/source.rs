@@ -394,6 +394,13 @@ impl SourceClient {
 
         files.sort_by(|a, b| a.path.cmp(&b.path));
 
+        // A skill whose frontmatter will not parse, or that has no description,
+        // installs happily and is then never selected by the agent. Catch it
+        // here rather than shipping something inert.
+        if let Some(skill_md) = files.iter().find(|f| f.path == "SKILL.md") {
+            validate_skill_md(&skill_md.bytes, prefix, &source.slug())?;
+        }
+
         Ok(ResolvedSkill {
             source: source.slug(),
             source_url: source.clone_url(),
@@ -404,7 +411,83 @@ impl SourceClient {
     }
 }
 
+/// Check that a fetched `SKILL.md` carries the frontmatter the standard needs.
+fn validate_skill_md(bytes: &[u8], path: &str, slug: &str) -> Result<()> {
+    let text = std::str::from_utf8(bytes)
+        .with_context(|| format!("SKILL.md in {} is not valid UTF-8", slug))?;
+
+    let Some(rest) = text.strip_prefix("---") else {
+        anyhow::bail!("'{}' in {} has no YAML frontmatter in SKILL.md", path, slug);
+    };
+    let Some(end) = rest.find(
+        "
+---",
+    ) else {
+        anyhow::bail!(
+            "'{}' in {} has an unterminated frontmatter block in SKILL.md",
+            path,
+            slug
+        );
+    };
+
+    let frontmatter: serde_yaml::Value = serde_yaml::from_str(rest[..end].trim())
+        .with_context(|| format!("Could not parse the frontmatter of '{}' in {}", path, slug))?;
+
+    for field in ["name", "description"] {
+        let present = frontmatter
+            .get(field)
+            .and_then(|v| v.as_str())
+            .map(|v| !v.trim().is_empty())
+            .unwrap_or(false);
+        if !present {
+            anyhow::bail!(
+                "SKILL.md for '{}' in {} has no `{}`. Agents select skills by                  description, so one without it is never used.",
+                path,
+                slug,
+                field
+            );
+        }
+    }
+
+    Ok(())
+}
+
+/// What a source path turned out to hold.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceKind {
+    Skill,
+    Bundle,
+}
+
 impl SourceClient {
+    /// Resolve a ref and determine whether the path holds a bundle or a skill.
+    ///
+    /// A single cheap request: a bundle is a directory with `BUNDLE.toml`, and
+    /// a 404 on that file means the path is a plain skill.
+    pub async fn probe(
+        &self,
+        source: &GitHubSource,
+        path: &str,
+        rev: Option<&str>,
+    ) -> Result<(String, SourceKind)> {
+        use crate::core::bundle::BUNDLE_FILE;
+
+        let commit = self.resolve_commit(source, rev).await?;
+        let prefix = path.trim_matches('/');
+        let manifest_path = if prefix.is_empty() {
+            BUNDLE_FILE.to_string()
+        } else {
+            format!("{}/{}", prefix, BUNDLE_FILE)
+        };
+
+        let kind = match self.fetch_raw(source, &commit, &manifest_path).await {
+            Ok(_) => SourceKind::Bundle,
+            Err(_) => SourceKind::Skill,
+        };
+
+        Ok((commit, kind))
+    }
+
     /// Resolve and download a bundle: its `BUNDLE.toml` and every file the
     /// manifest names.
     pub async fn fetch_bundle(

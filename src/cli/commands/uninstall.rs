@@ -1,37 +1,54 @@
-//! `agentpm uninstall` — remove an installed agent.
+//! `agentpm uninstall` — drop an entry from the manifest and reconcile.
+//!
+//! The inverse of `install`: the manifest is the record of what a project
+//! needs, so removal edits it and lets `sync` prune the files. That keeps the
+//! lockfile honest instead of leaving orphaned directories behind.
 
 use anyhow::Result;
 
-use crate::installers::{get_installer, Target};
-use crate::utils::paths::Scope;
-use crate::utils::ui;
+use crate::core::manifest::{Manifest, MANIFEST_FILE};
+use crate::utils::{paths, ui};
 
-use super::super::TargetArg;
+pub async fn execute(name: &str) -> Result<()> {
+    ui::intro(&format!("agentpm uninstall {}", name));
 
-pub async fn execute(agent_name: &str, target: Option<TargetArg>, global: bool) -> Result<()> {
-    let targets: Vec<Target> = match target {
-        Some(t) => vec![t.into()],
-        None => Target::all().to_vec(),
+    let project_root = paths::project_root()?;
+    let Some(manifest_path) = Manifest::find(&project_root) else {
+        ui::outro_cancel(&format!("No {} in this project", MANIFEST_FILE));
+        return Ok(());
     };
-    let scope = Scope::from_global_flag(global);
 
-    ui::intro(&format!("agentpm uninstall {}", agent_name));
+    let mut manifest = Manifest::load(&manifest_path)?;
+    let removed_skill = manifest.skills.remove(name).is_some();
+    let removed_bundle = manifest.bundles.remove(name).is_some();
 
-    for target in targets {
-        let installer = get_installer(target, scope);
-        installer.uninstall(agent_name)?;
-        ui::success(&format!(
-            "{}   {}
-{} {} scope",
-            ui::bold(target.display_name()),
-            ui::dim(&installer.location()),
-            ui::dim("·"),
-            scope.display_name()
-        ));
+    if !removed_skill && !removed_bundle {
+        ui::warning(&format!("'{}' is not declared in {}", name, MANIFEST_FILE));
+        let declared: Vec<&String> = manifest
+            .skills
+            .keys()
+            .chain(manifest.bundles.keys())
+            .collect();
+        if !declared.is_empty() {
+            ui::note(
+                "Declared here",
+                &declared
+                    .iter()
+                    .map(|d| d.as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            );
+        }
+        ui::outro_cancel("Nothing removed");
+        return Ok(());
     }
 
-    ui::info("MCP servers are left in place — they may be shared with other agents");
-    ui::outro(&format!("{} removed", agent_name));
-
-    Ok(())
+    manifest.save(&manifest_path)?;
+    ui::success(&format!(
+        "Removed {} from {}",
+        ui::bold(name),
+        ui::accent(MANIFEST_FILE)
+    ));
+    // sync prunes anything the manifest no longer declares and closes the rail.
+    super::sync::reconcile().await
 }

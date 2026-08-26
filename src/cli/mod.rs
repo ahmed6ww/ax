@@ -2,9 +2,7 @@
 
 pub mod commands;
 
-use clap::{Parser, Subcommand, ValueEnum};
-
-use crate::installers::Target;
+use clap::{Parser, Subcommand};
 
 /// agentpm (Agent Package Manager) - The npm of the Agentic AI era
 ///
@@ -25,21 +23,21 @@ pub enum Commands {
     /// Initialize agentpm and detect installed editors
     Init,
 
-    /// List available agents from the registry
+    /// Show what this project has installed
     List,
 
-    /// Install an agent configuration
+    /// Add a skill or bundle to agentpm.toml and sync
     Install {
-        /// Name of the agent to install
-        agent: String,
+        /// Source as owner/repo, optionally with #path/inside/repo
+        source: String,
 
-        /// Target editor (claude, codex). Omit to install to every detected target.
-        #[arg(short, long, value_enum)]
-        target: Option<TargetArg>,
+        /// Branch, tag or commit to pin. Defaults to the default branch.
+        #[arg(long)]
+        rev: Option<String>,
 
-        /// Install for the user instead of this project
-        #[arg(short, long, default_value = "false")]
-        global: bool,
+        /// Name to install under. Defaults to the last path segment.
+        #[arg(long)]
+        name: Option<String>,
     },
 
     /// Install everything agentpm.toml declares, for the whole team
@@ -53,32 +51,9 @@ pub enum Commands {
         update: bool,
     },
 
-    /// Remove an installed agent
+    /// Remove a skill or bundle from agentpm.toml and sync
     Uninstall {
-        /// Name of the agent to remove
+        /// Name it was installed under
         agent: String,
-
-        /// Target editor (claude, codex). Omit to remove from every target.
-        #[arg(short, long, value_enum)]
-        target: Option<TargetArg>,
-
-        /// Remove from user scope instead of this project
-        #[arg(short, long, default_value = "false")]
-        global: bool,
     },
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum TargetArg {
-    Claude,
-    Codex,
-}
-
-impl From<TargetArg> for Target {
-    fn from(arg: TargetArg) -> Self {
-        match arg {
-            TargetArg::Claude => Target::Claude,
-            TargetArg::Codex => Target::Codex,
-        }
-    }
 }

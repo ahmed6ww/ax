@@ -17,11 +17,8 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
 
-use super::common::{
-    copy_skill_subdirectories, render_skill_md, skill_dir, write_atomic, write_atomic_preserving,
-};
+use super::common::{skill_dir, write_atomic_preserving};
 use super::{Capabilities, Installer};
-use crate::core::agent::{AgentConfig, Skill};
 use crate::utils::paths::{self, Scope};
 
 pub struct CodexInstaller {
@@ -35,21 +32,6 @@ impl CodexInstaller {
 
     fn skills_dir(&self) -> Result<PathBuf> {
         paths::codex_skills_dir(self.scope)
-    }
-
-    /// Codex has no subagent file, so the identity becomes a skill that carries
-    /// the system prompt. Named `<agent>-identity` to avoid colliding with a
-    /// skill the agent also ships.
-    fn identity_skill(agent: &AgentConfig) -> Skill {
-        Skill {
-            name: format!("{}-identity", agent.name),
-            description: Some(format!(
-                "{} Apply when working in this agent's domain.",
-                agent.description.trim_end_matches('.')
-            )),
-            content: agent.identity.system_prompt.clone(),
-            ..Default::default()
-        }
     }
 }
 
@@ -72,37 +54,6 @@ impl Installer for CodexInstaller {
 
     fn skills_root(&self) -> Result<PathBuf> {
         self.skills_dir()
-    }
-
-    fn install_identity(&self, _agent: &AgentConfig) -> Result<()> {
-        // Handled inside install_skills; the orchestrator does not call this
-        // because `capabilities().subagents` is false.
-        Ok(())
-    }
-
-    fn install_skills(&self, agent: &AgentConfig) -> Result<()> {
-        let skills_root = self.skills_dir()?;
-
-        let identity = Self::identity_skill(agent);
-        let identity_dir = skill_dir(&skills_root, &identity.name)?;
-        write_atomic(
-            &identity_dir.join("SKILL.md"),
-            render_skill_md(&identity, &agent.description)?.as_bytes(),
-        )?;
-
-        for skill in &agent.skills {
-            let folder = skill_dir(&skills_root, &skill.name)?;
-            write_atomic(
-                &folder.join("SKILL.md"),
-                render_skill_md(skill, &agent.description)?.as_bytes(),
-            )?;
-
-            if let Some(source_dir) = &skill.source_dir {
-                copy_skill_subdirectories(source_dir, &folder)?;
-            }
-        }
-
-        Ok(())
     }
 
     fn install_mcp(&self, tools: &[crate::core::agent::McpTool]) -> Result<()> {

@@ -16,12 +16,8 @@ use serde_json::{json, Map, Value};
 use std::fs;
 use std::path::PathBuf;
 
-use super::common::{
-    copy_skill_subdirectories, render_skill_md, safe_join, skill_dir, write_atomic,
-    write_atomic_preserving,
-};
+use super::common::{safe_join, skill_dir, write_atomic, write_atomic_preserving};
 use super::{Capabilities, Installer, SettingsContribution};
-use crate::core::agent::AgentConfig;
 use crate::utils::paths::{self, Scope};
 
 pub struct ClaudeInstaller {
@@ -56,41 +52,6 @@ impl ClaudeInstaller {
     fn agents_dir(&self) -> Result<PathBuf> {
         paths::claude_agents_dir(self.scope)
     }
-
-    /// Render the subagent file: YAML frontmatter plus the system prompt.
-    fn render_subagent(agent: &AgentConfig) -> Result<String> {
-        use serde_yaml::{Mapping, Value as Yaml};
-
-        let mut fm = Mapping::new();
-        fm.insert(Yaml::from("name"), Yaml::from(agent.name.as_str()));
-        fm.insert(
-            Yaml::from("description"),
-            Yaml::from(agent.description.as_str()),
-        );
-
-        if let Some(model) = agent.identity.model.as_deref() {
-            fm.insert(Yaml::from("model"), Yaml::from(short_model_name(model)));
-        }
-
-        let frontmatter = serde_yaml::to_string(&Yaml::Mapping(fm))
-            .context("Failed to serialize subagent frontmatter")?;
-
-        Ok(format!(
-            "---\n{}---\n\n{}\n",
-            frontmatter,
-            agent.identity.system_prompt.trim_end()
-        ))
-    }
-}
-
-/// Claude Code accepts a model alias rather than a full model id.
-fn short_model_name(model: &str) -> &str {
-    for alias in ["opus", "sonnet", "haiku"] {
-        if model.contains(alias) {
-            return alias;
-        }
-    }
-    model
 }
 
 impl Installer for ClaudeInstaller {
@@ -157,29 +118,6 @@ impl Installer for ClaudeInstaller {
 
         let rendered = format!("{}\n", serde_json::to_string_pretty(&settings)?);
         write_atomic_preserving(&path, rendered.as_bytes())
-    }
-
-    fn install_identity(&self, agent: &AgentConfig) -> Result<()> {
-        let agents_dir = self.agents_dir()?;
-        let file =
-            skill_dir(&agents_dir, &format!("{}.md", agent.name)).context("Invalid agent name")?;
-        write_atomic(&file, Self::render_subagent(agent)?.as_bytes())
-    }
-
-    fn install_skills(&self, agent: &AgentConfig) -> Result<()> {
-        let skills_root = self.skills_dir()?;
-
-        for skill in &agent.skills {
-            let folder = skill_dir(&skills_root, &skill.name)?;
-            let contents = render_skill_md(skill, &agent.description)?;
-            write_atomic(&folder.join("SKILL.md"), contents.as_bytes())?;
-
-            if let Some(source_dir) = &skill.source_dir {
-                copy_skill_subdirectories(source_dir, &folder)?;
-            }
-        }
-
-        Ok(())
     }
 
     fn install_mcp(&self, tools: &[crate::core::agent::McpTool]) -> Result<()> {
@@ -456,17 +394,4 @@ fn apply_hooks(
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn model_ids_collapse_to_claude_code_aliases() {
-        assert_eq!(short_model_name("claude-3-5-sonnet-latest"), "sonnet");
-        assert_eq!(short_model_name("claude-opus-4-6"), "opus");
-        assert_eq!(short_model_name("haiku"), "haiku");
-        assert_eq!(short_model_name("inherit"), "inherit");
-    }
 }
