@@ -1,0 +1,1027 @@
+<title>ax Hardening Register</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+  :root {
+    --ground:  #FAF8F4;
+    --surface: #FFFFFF;
+    --sunk:    #F2EEE7;
+    --ink:     #1A1714;
+    --ink-2:   #4A423A;
+    --muted:   #7A7063;
+    --rule:    #E4DDD2;
+    --rule-2:  #D2C8B9;
+    --accent:  #C2571E;
+    --accent-q:#F5E4D8;
+    --crit:    #8E1230;
+    --crit-bg: #F7E3E7;
+    --warn:    #7A5B00;
+    --warn-bg: #F6EDD5;
+    --info:    #2E5C86;
+    --info-bg: #E3ECF4;
+    --ok:      #2C6B4F;
+
+    --shadow: 0 1px 2px rgba(26,23,20,.05), 0 8px 24px -16px rgba(26,23,20,.18);
+
+    --f-display: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+    --f-body: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:  #141210;
+      --surface: #1D1A16;
+      --sunk:    #24201A;
+      --ink:     #EFEAE2;
+      --ink-2:   #C6BDB0;
+      --muted:   #968C7E;
+      --rule:    #2E281F;
+      --rule-2:  #423A2E;
+      --accent:  #EE8043;
+      --accent-q:#38271C;
+      --crit:    #FF7686;
+      --crit-bg: #351A21;
+      --warn:    #DCAE3C;
+      --warn-bg: #32280F;
+      --info:    #8FB8E0;
+      --info-bg: #172533;
+      --ok:      #6FBE93;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:  #141210;
+    --surface: #1D1A16;
+    --sunk:    #24201A;
+    --ink:     #EFEAE2;
+    --ink-2:   #C6BDB0;
+    --muted:   #968C7E;
+    --rule:    #2E281F;
+    --rule-2:  #423A2E;
+    --accent:  #EE8043;
+    --accent-q:#38271C;
+    --crit:    #FF7686;
+    --crit-bg: #351A21;
+    --warn:    #DCAE3C;
+    --warn-bg: #32280F;
+    --info:    #8FB8E0;
+    --info-bg: #172533;
+    --ok:      #6FBE93;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 28px 120px;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead {
+    border-bottom: 2px solid var(--ink);
+    padding: 56px 0 22px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 28px;
+    justify-content: space-between;
+  }
+  .mark {
+    font-family: var(--f-mono);
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-family: var(--f-display);
+    font-weight: 600;
+    font-size: clamp(34px, 5.2vw, 54px);
+    line-height: 1.04;
+    letter-spacing: -0.015em;
+    margin: 0;
+    text-wrap: balance;
+    max-width: 15ch;
+  }
+  .standfirst {
+    font-size: 17px;
+    color: var(--ink-2);
+    max-width: 46ch;
+    margin: 18px 0 0;
+  }
+  .facts {
+    font-family: var(--f-mono);
+    font-size: 12.5px;
+    line-height: 2.1;
+    color: var(--muted);
+    border-left: 2px solid var(--rule-2);
+    padding-left: 18px;
+    min-width: 210px;
+    font-variant-numeric: tabular-nums;
+  }
+  .facts b { color: var(--ink); font-weight: 500; }
+
+  /* ---------- sections ---------- */
+  section { padding-top: 68px; scroll-margin-top: 20px; }
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .eyebrow::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--rule);
+  }
+  h2 {
+    font-family: var(--f-display);
+    font-weight: 600;
+    font-size: clamp(25px, 3.2vw, 33px);
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    margin: 0 0 14px;
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: var(--f-display);
+    font-weight: 600;
+    font-size: 20px;
+    margin: 40px 0 12px;
+    letter-spacing: -0.005em;
+  }
+  p { margin: 0 0 16px; max-width: 68ch; }
+  .lede { font-size: 17.5px; color: var(--ink-2); max-width: 64ch; }
+  code {
+    font-family: var(--f-mono);
+    font-size: .875em;
+    background: var(--sunk);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 1px 5px;
+    color: var(--ink);
+  }
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  /* ---------- verdict ---------- */
+  .verdict {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin: 30px 0 8px;
+  }
+  .vcell { background: var(--surface); padding: 18px 20px; }
+  .vnum {
+    font-family: var(--f-mono);
+    font-size: 30px;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    display: block;
+  }
+  .vlabel {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 9px;
+    display: block;
+  }
+  .vcell.c .vnum { color: var(--crit); }
+  .vcell.h .vnum { color: var(--warn); }
+  .vcell.m .vnum { color: var(--info); }
+
+  /* ---------- finding register ---------- */
+  .register { border-top: 1px solid var(--rule); margin-top: 26px; }
+  .finding {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    gap: 0 22px;
+    border-bottom: 1px solid var(--rule);
+    padding: 20px 0 20px 14px;
+    border-left: 3px solid var(--rule-2);
+  }
+  .finding.sev-c { border-left-color: var(--crit); }
+  .finding.sev-h { border-left-color: var(--warn); }
+  .finding.sev-m { border-left-color: var(--info); }
+  .finding.sev-l { border-left-color: var(--rule-2); }
+
+  .fid {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-2);
+    letter-spacing: .04em;
+    padding-top: 2px;
+  }
+  .sev {
+    display: inline-block;
+    font-family: var(--f-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 2px;
+    margin-top: 8px;
+  }
+  .sev-c .sev { background: var(--crit-bg); color: var(--crit); }
+  .sev-h .sev { background: var(--warn-bg); color: var(--warn); }
+  .sev-m .sev { background: var(--info-bg); color: var(--info); }
+  .sev-l .sev { background: var(--sunk); color: var(--muted); }
+
+  .ftitle { font-weight: 600; font-size: 16.5px; margin: 0 0 6px; line-height: 1.35; }
+  .fbody { margin: 0; color: var(--ink-2); font-size: 15px; max-width: 74ch; }
+  .fbody + .fbody { margin-top: 8px; }
+  .fix { color: var(--ink); }
+  .fix b {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ok);
+    font-weight: 600;
+    margin-right: 7px;
+  }
+  .ev {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 9px;
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    padding-bottom: 2px;
+  }
+
+  /* ---------- code ---------- */
+  pre {
+    font-family: var(--f-mono);
+    font-size: 13px;
+    line-height: 1.62;
+    background: var(--sunk);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 18px 20px;
+    overflow-x: auto;
+    margin: 20px 0;
+    color: var(--ink-2);
+  }
+  pre b { color: var(--ink); font-weight: 500; }
+  pre i { color: var(--muted); font-style: normal; }
+  pre em { color: var(--accent); font-style: normal; }
+
+  /* ---------- layer diagram ---------- */
+  .stack { margin: 26px 0 8px; display: flex; flex-direction: column; gap: 10px; }
+  .layer {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 14px 18px;
+    display: grid;
+    grid-template-columns: 118px 1fr;
+    gap: 18px;
+    align-items: baseline;
+    box-shadow: var(--shadow);
+  }
+  .layer.ports { border-style: dashed; border-color: var(--accent); background: var(--accent-q); }
+  .lname {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    color: var(--accent);
+  }
+  .ldesc { font-size: 14.5px; color: var(--ink-2); }
+  .ldesc code { background: transparent; border: 0; padding: 0; color: var(--ink); }
+  .flow {
+    text-align: center;
+    font-family: var(--f-mono);
+    font-size: 15px;
+    color: var(--rule-2);
+    line-height: 1;
+  }
+
+  /* ---------- phase table ---------- */
+  .tablewrap { overflow-x: auto; margin: 24px 0; }
+  table { border-collapse: collapse; width: 100%; min-width: 660px; font-size: 14.5px; }
+  th, td { text-align: left; padding: 13px 16px 13px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--ink);
+  }
+  td.ph { font-family: var(--f-mono); font-weight: 600; color: var(--accent); white-space: nowrap; }
+  td.dur { font-family: var(--f-mono); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  td.ids { font-family: var(--f-mono); font-size: 12px; color: var(--muted); line-height: 1.7; }
+  td b { font-weight: 600; }
+
+  ul.tight { margin: 0 0 16px; padding-left: 20px; max-width: 70ch; }
+  ul.tight li { margin-bottom: 7px; color: var(--ink-2); }
+  ul.tight li b { color: var(--ink); font-weight: 600; }
+
+  .note {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-q);
+    padding: 14px 18px;
+    margin: 22px 0;
+    font-size: 15px;
+    color: var(--ink-2);
+    max-width: 72ch;
+  }
+  .note b { color: var(--ink); }
+
+  footer {
+    margin-top: 76px;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule);
+    font-family: var(--f-mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  @media (max-width: 720px) {
+    .finding { grid-template-columns: 1fr; gap: 10px; }
+    .fid { display: flex; align-items: center; gap: 10px; padding-top: 0; }
+    .sev { margin-top: 0; }
+    .layer { grid-template-columns: 1fr; gap: 6px; }
+    .masthead { padding-top: 40px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div>
+      <span class="mark">ax · agent package manager</span>
+      <h1>Hardening the installer</h1>
+      <p class="standfirst">A package manager writes executable configuration into the user's home directory from a remote source it never verifies. That is the whole audit in one sentence — everything below is detail and sequencing.</p>
+    </div>
+    <div class="facts">
+      <b>2,357</b> lines of Rust<br>
+      <b>19</b> source files<br>
+      <b>3</b> unit tests<br>
+      <b>0</b> integration tests<br>
+      <b>0</b> clippy warnings*<br>
+      <b>v1.5.0</b> · edition 2021
+    </div>
+  </header>
+
+  <section id="verdict">
+    <p class="eyebrow">Verdict</p>
+    <h2>The code is clean. The architecture is not.</h2>
+    <p class="lede">Clippy passes with a single dead-code warning, so this is not a code-quality problem — it reads &ldquo;old&rdquo; because the design stopped at the demo stage and never grew the parts a package manager needs: an integrity model, an install ledger, a versioned registry protocol, and a transaction boundary.</p>
+    <p><b>Since this audit was first written, two findings have superseded everything else.</b> ax writes Claude Code skills into the Claude <em>Desktop</em> directory on macOS and Windows, and writes Codex skills into <code>~/.codex/skills</code>, which Codex does not scan. On the two targets the product is now betting on, installs report success and land where nothing reads them. See PATH-01 and PATH-02 — they gate every other item here.</p>
+    <p>The single dead-code warning is itself a shipped bug: <code>ClaudeInstaller.global</code> is never read, which means <code>--global</code> silently does nothing on the default target. That pattern — a flag or a feature that returns <code>Ok(())</code> without doing the work — repeats across the codebase and is the source of most of the &ldquo;not properly implemented&rdquo; feel.</p>
+
+    <div class="verdict">
+      <div class="vcell c"><span class="vnum">5</span><span class="vlabel">Critical</span></div>
+      <div class="vcell h"><span class="vnum">16</span><span class="vlabel">High</span></div>
+      <div class="vcell m"><span class="vnum">17</span><span class="vlabel">Medium</span></div>
+      <div class="vcell"><span class="vnum">4</span><span class="vlabel">Low</span></div>
+      <div class="vcell"><span class="vnum">42</span><span class="vlabel">Total</span></div>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-top:14px;">* <code>cargo clippy --all-targets</code> on 1.91.1 — one <code>dead_code</code> warning, no lints. Findings below come from reading the code, not from tooling.</p>
+  </section>
+
+  <section id="security">
+    <p class="eyebrow">Register 01 — Security</p>
+    <h2>Remote input reaches the filesystem and the shell</h2>
+    <p class="lede">Everything <code>ax install</code> writes originates from an unauthenticated HTTP fetch, and nothing between the wire and <code>fs::write</code> validates it.</p>
+
+    <div class="register">
+
+      <div class="finding sev-c">
+        <div class="fid">SEC&#8209;01<br><span class="sev">Critical</span></div>
+        <div>
+          <p class="ftitle">Registry content becomes a command the editor will execute</p>
+          <p class="fbody">The <code>command</code>, <code>args</code> and <code>env</code> of every MCP entry are copied verbatim from registry YAML into the user's Claude, Cursor and Codex configuration. The next time that editor starts, it launches the command. There is no allowlist, no signature, no digest, and no prompt showing the user what they are about to authorize — <code>install.rs</code> prompts for an API key but never for consent to run a binary.</p>
+          <p class="fbody">A compromised registry repo, a hijacked account, or any MITM on the fetch is arbitrary code execution on every machine that installs the affected agent. The blast radius includes the <code>scripts/</code> payloads downloaded into skill folders, which <code>SKILL.md</code> then instructs the agent to execute by path.</p>
+          <p class="fbody fix"><b>Fix</b> Digest-verified manifests (see the registry format below), plus a trust gate that prints each command and requires confirmation unless <code>--yes</code> or a configured allowlist covers it. Add <code>--no-mcp</code>.</p>
+          <span class="ev">src/core/registry.rs:61 → src/installers/claude.rs:373-379 · cursor.rs:430-435 · codex.rs:251-257</span>
+        </div>
+      </div>
+
+      <div class="finding sev-c">
+        <div class="fid">SEC&#8209;02<br><span class="sev">Critical</span></div>
+        <div>
+          <p class="ftitle">Path traversal from remote-controlled names</p>
+          <p class="fbody"><code>agent.name</code> and <code>skill.name</code> arrive from registry YAML and SKILL.md frontmatter, then go straight into <code>Path::join</code> with no normalization. A skill named <code>../../.bashrc</code> — or on Windows, an absolute path or a reserved device name — escapes the intended directory and overwrites arbitrary files with attacker-chosen content. The name is also interpolated into the remote fetch URL, so it can redirect the download itself.</p>
+          <p class="fbody fix"><b>Fix</b> A single <code>SafeName</code> newtype validated at the parse boundary: <code>^[a-z0-9][a-z0-9._-]{0,63}$</code>, rejecting <code>.</code>, <code>..</code> and Windows reserved names. Parse it once in <code>core</code> so no installer can receive an unvalidated name.</p>
+          <span class="ev">src/installers/claude.rs:309,329 · codex.rs:194 · cursor.rs:371,394 · registry.rs:101,123</span>
+        </div>
+      </div>
+
+      <div class="finding sev-c">
+        <div class="fid">SEC&#8209;03<br><span class="sev">Critical</span></div>
+        <div>
+          <p class="ftitle">No integrity verification anywhere in the chain</p>
+          <p class="fbody">There is no checksum, no signature, no lockfile and no pinning at any hop: not on the registry index, not on agent manifests, not on downloaded skill files, and not on the release binary that <code>install.sh</code> pipes into <code>/usr/local/bin</code>. The GitHub release workflow publishes no <code>SHA256SUMS</code> and no build attestation, so even a diligent user has nothing to verify against.</p>
+          <p class="fbody fix"><b>Fix</b> <code>sha256</code> on every artifact, recorded in the registry index and re-checked after download; <code>SHA256SUMS</code> plus GitHub artifact attestation on releases; <code>install.sh</code> verifies before it moves the binary into place.</p>
+          <span class="ev">src/core/registry.rs:36-95 · install.sh:57-71 · .github/workflows/release.yml:89-100</span>
+        </div>
+      </div>
+
+      <div class="finding sev-h">
+        <div class="fid">SEC&#8209;04<br><span class="sev">High</span></div>
+        <div>
+          <p class="ftitle">TOML injection in the Codex config writer</p>
+          <p class="fbody">The Codex installer builds its config by string concatenation — <code>format!("command = \"{}\"", tool.command)</code> — over remote-controlled values. A quote or newline in a command, arg or env value closes the string early and injects arbitrary TOML into <code>~/.codex/config.toml</code>, including additional <code>[mcp_servers.*]</code> sections the user never installed. The same function also appends blindly, so it grows without bound and can never update an existing entry.</p>
+          <p class="fbody fix"><b>Fix</b> Serialize with the <code>toml</code> crate — already a dependency. Parse the existing document, merge, re-serialize.</p>
+          <span class="ev">src/installers/codex.rs:241-278</span>
+        </div>
+      </div>
+
+      <div class="finding sev-h">
+        <div class="fid">SEC&#8209;05<br><span class="sev">High</span></div>
+        <div>
+          <p class="ftitle">A malformed user config is silently destroyed</p>
+          <p class="fbody">Both JSON writers read the existing editor config and fall back to an empty object when parsing fails: <code>serde_json::from_str(&amp;content).unwrap_or_else(|_| json!({}))</code>. A trailing comma anywhere in the user's <code>claude_desktop_config.json</code> — or a file that is merely newer than what this parser understands — means <code>ax install</code> deletes every MCP server they had configured, with no error and no backup.</p>
+          <p class="fbody fix"><b>Fix</b> Fail loudly on unparseable config and refuse to write. Never treat a parse error as an empty document.</p>
+          <span class="ev">src/installers/claude.rs:358-363 · cursor.rs:416-421</span>
+        </div>
+      </div>
+
+      <div class="finding sev-h">
+        <div class="fid">SEC&#8209;06<br><span class="sev">High</span></div>
+        <div>
+          <p class="ftitle">Registry URL scheme is unrestricted</p>
+          <p class="fbody"><code>registry_url</code> is read from <code>~/.ax/config.toml</code> and used to build every fetch URL with no scheme check. A <code>http://</code> or <code>file://</code> value — set by a stray tutorial, a shared dotfile, or anything that can write that file — downgrades the entire trust chain to plaintext. The client is also built with <code>Client::new()</code>: no timeout, no retry policy, no redirect limit, no user-agent.</p>
+          <p class="fbody fix"><b>Fix</b> Require <code>https://</code> unless <code>--allow-insecure-registry</code> is passed explicitly. Build one shared client with a 30s timeout, capped redirects and a versioned user-agent.</p>
+          <span class="ev">src/core/config.rs:187-197 · registry.rs:19-33</span>
+        </div>
+      </div>
+
+      <div class="finding sev-h">
+        <div class="fid">SEC&#8209;07<br><span class="sev">High</span></div>
+        <div>
+          <p class="ftitle">API keys are echoed, sprayed and stored world-readable</p>
+          <p class="fbody">Three separate problems in one flow. The key is read with a plain <code>read_line</code>, so it echoes to the terminal and lands in scrollback and screen recordings. It is then written into <em>every</em> env value matching <code>${...}</code>, so one key is copied into unrelated variables. Finally it is persisted in plaintext to the editor config with default permissions — mode 0644 on Unix.</p>
+          <p class="fbody fix"><b>Fix</b> Masked prompt; substitute only the placeholder whose name matches; <code>0600</code> on any file containing a secret; and prefer leaving <code>${VAR}</code> unexpanded so the key stays in the environment rather than on disk.</p>
+          <span class="ev">src/cli/commands/install.rs:90-106 · claude.rs:394 · codex.rs:278</span>
+        </div>
+      </div>
+
+      <div class="finding sev-m">
+        <div class="fid">SEC&#8209;08<br><span class="sev">Medium</span></div>
+        <div>
+          <p class="ftitle">Config writes are neither atomic nor backed up</p>
+          <p class="fbody">Every installer calls <code>fs::write</code> directly onto a live editor config. An interrupt or a crash mid-write leaves a truncated JSON or TOML file that the editor cannot load. Two concurrent <code>ax install</code> runs interleave and lose one another's writes.</p>
+          <p class="fbody fix"><b>Fix</b> Write to a sibling temp file, <code>fsync</code>, then <code>rename</code> over the target. Keep a <code>.bak</code> of the previous version and take an advisory lock for the duration of an install.</p>
+          <span class="ev">src/installers/claude.rs:394 · cursor.rs:444 · codex.rs:278</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="correctness">
+    <p class="eyebrow">Register 02 — Correctness</p>
+    <h2>Features that report success without doing the work</h2>
+    <p class="lede">These are the &ldquo;not properly implemented&rdquo; items. The common shape is a code path that returns <code>Ok(())</code>, prints a green check, and leaves the user with something incomplete.</p>
+
+    <div class="register">
+
+      <div class="finding sev-c">
+        <div class="fid">PATH&#8209;01<br><span class="sev">Critical</span></div>
+        <div>
+          <p class="ftitle">Claude Code skills are written to the Claude Desktop directory</p>
+          <p class="fbody">Claude Code reads skills from <code>~/.claude/skills/&lt;name&gt;/SKILL.md</code> on every platform, and project skills from <code>.claude/skills/</code>. <code>claude_config_dir()</code> instead returns <code>~/Library/Application Support/Claude</code> on macOS and <code>%APPDATA%\Claude</code> on Windows — those are Claude <em>Desktop</em> paths. Linux is correct only by accident, via the <code>~/.claude</code> fallback that runs when <code>~/.config/claude</code> does not exist.</p>
+          <p class="fbody">On macOS and Windows every install reports success and writes files Claude Code will never read. The same wrong root is used for <code>agents/</code> and for the MCP config.</p>
+          <p class="fbody fix"><b>Fix</b> <code>~/.claude</code> on all platforms, honouring <code>CLAUDE_CONFIG_DIR</code>. Add project scope at <code>.claude/</code>. Never write to <code>~/.claude/skills/synced/</code> — that name is reserved for claude.ai sync.</p>
+          <span class="ev">src/utils/paths.rs:316-343 · claude.rs:96,322-324 · verified against code.claude.com/docs/en/skills</span>
+        </div>
+      </div>
+
+      <div class="finding sev-c">
+        <div class="fid">PATH&#8209;02<br><span class="sev">Critical</span></div>
+        <div>
+          <p class="ftitle">Codex skills are written to a directory Codex never scans</p>
+          <p class="fbody">Codex discovers skills in <code>.agents/skills</code>, walking from the working directory up to the repo root, then <code>$HOME/.agents/skills</code>, then <code>/etc/codex/skills</code>. <code>~/.codex/skills</code> is not a skill location at all — <code>~/.codex</code> holds <code>config.toml</code> and nothing else that matters here. Every Codex skill install has therefore been inert, on every platform, and macOS and Windows additionally resolve <code>~/.codex</code> itself to a Desktop-style path that does not exist.</p>
+          <p class="fbody fix"><b>Fix</b> Write skills to <code>~/.agents/skills/</code> and <code>.agents/skills/</code>; keep <code>~/.codex/config.toml</code> for MCP only, and resolve it as a literal home-relative path rather than through <code>dirs::config_dir()</code>.</p>
+          <span class="ev">src/utils/paths.rs:400-427 · codex.rs:38-40,189 · verified against learn.chatgpt.com/docs/build-skills</span>
+        </div>
+      </div>
+
+      <div class="finding sev-h">
+        <div class="fid">BUG&#8209;01<br><span class="sev">High</span></div>
+        <div>
+          <p class="ftitle"><code>ax list</code> panics on any non-ASCII description</p>
+          <p class="fbody">The truncation slices by byte offset — <code>&amp;agent.description[..35]</code> — which panics when byte 35 falls inside a multi-byte character. Every built-in agent description is ASCII, so this is invisible today; the first registry entry with an accent, an em-dash or an emoji crashes the command outright.</p>
+          <p class="fbody fix"><b>Fix</b> Truncate on <code>char_indices</code>, or use a width-aware helper. Terminal width should also come from <code>console</code> rather than the hardcoded 85-column rule.</p>
+          <span class="ev">src/cli/commands/list.rs:307-310</span>
+        </div>
+      </div>
+
+      <div class="finding sev-h">
+        <div class="fid">BUG&#8209;02<br><span class="sev">High</span></div>
+        <div>
+          <p class="ftitle"><code>--global</code> does nothing on two of three targets</p>
+          <p class="fbody">Only Cursor reads the flag. <code>ClaudeInstaller.global</code> is never read — the compiler says so — and <code>CodexInstaller.global</code> is silenced with <code>#[allow(dead_code)]</code>. Both always write to the user's home directory, so <code>ax install foo</code> and <code>ax install foo --global</code> produce identical results, and there is no project-scoped install for Claude at all.</p>
+          <p class="fbody fix"><b>Fix</b> Resolve a scope in one place and pass it to every renderer; if a target genuinely cannot do project-local installs, reject the flag with a clear message instead of accepting and ignoring it.</p>
+          <span class="ev">src/installers/claude.rs:22 · codex.rs:22-23 · cursor.rs:328-334</span>
+        </div>
+      </div>
+
+      <div class="finding sev-h">
+        <div class="fid">BUG&#8209;03<br><span class="sev">High</span></div>
+        <div>
+          <p class="ftitle">Skill assets are fetched from a hardcoded guess-list</p>
+          <p class="fbody">Because raw.githubusercontent has no directory listing, the installer tries a fixed set of twelve filenames — <code>run_ruff.py</code>, <code>cleanup_rules.md</code>, <code>quad_strategy.md</code> and so on — and ignores every 404. Any skill whose files are not on that list installs with its <code>scripts/</code> and <code>references/</code> missing, while its <code>SKILL.md</code> still instructs the agent to read them. The failure is completely silent, and the identical list is duplicated in two files.</p>
+          <p class="fbody fix"><b>Fix</b> The manifest declares its files explicitly. This is the single change that makes the skill format actually work for third-party authors.</p>
+          <span class="ev">src/installers/claude.rs:256-282 · codex.rs:122-153</span>
+        </div>
+      </div>
+
+      <div class="finding sev-h">
+        <div class="fid">BUG&#8209;04<br><span class="sev">High</span></div>
+        <div>
+          <p class="ftitle">Registry failures are presented as a real catalog</p>
+          <p class="fbody">Any non-2xx response from the registry — a 500, a rate limit, a typo'd URL, a captive portal — causes <code>fetch_agents</code> to return three hardcoded demo agents as though they came from the network. The user sees a plausible catalog and no indication anything failed. <code>fetch_agent</code> does the same as a last resort.</p>
+          <p class="fbody fix"><b>Fix</b> Report the failure with its status code. Fall back only to a real on-disk cache, and say so when it happens.</p>
+          <span class="ev">src/core/registry.rs:46-49, 89-92</span>
+        </div>
+      </div>
+
+      <div class="finding sev-m">
+        <div class="fid">BUG&#8209;05<br><span class="sev">Medium</span></div>
+        <div>
+          <p class="ftitle">Blocking HTTP inside the async runtime, with no timeout</p>
+          <p class="fbody"><code>download_remote_file</code> calls <code>reqwest::blocking::get</code> from inside <code>#[tokio::main]</code>, stalling a runtime worker for the duration of each request; on a current-thread runtime it would fail outright. There is no timeout on any request, so an unresponsive host hangs the CLI indefinitely, and the twelve speculative fetches per skill run strictly one after another.</p>
+          <p class="fbody fix"><b>Fix</b> Make the installer trait async, use the shared timeout-configured client, and fetch the manifest's files concurrently with a bounded <code>JoinSet</code>.</p>
+          <span class="ev">src/installers/claude.rs:285-300 · codex.rs:155-173</span>
+        </div>
+      </div>
+
+      <div class="finding sev-m">
+        <div class="fid">BUG&#8209;06<br><span class="sev">Medium</span></div>
+        <div>
+          <p class="ftitle"><code>ax init</code> overwrites customized config</p>
+          <p class="fbody">Init unconditionally constructs <code>ApmConfig::new()</code> and saves it, discarding a custom <code>registry_url</code> or <code>verbose</code> setting. Re-running init — which the CLI encourages after installing an editor — resets the user's registry back to the default.</p>
+          <p class="fbody fix"><b>Fix</b> Load-merge-save, and only overwrite fields init actually re-detects. Prompt or require <code>--force</code> to reset.</p>
+          <span class="ev">src/cli/commands/init.rs:192-201</span>
+        </div>
+      </div>
+
+      <div class="finding sev-m">
+        <div class="fid">BUG&#8209;07<br><span class="sev">Medium</span></div>
+        <div>
+          <p class="ftitle">There is no <code>ax uninstall</code></p>
+          <p class="fbody"><code>uninstall</code> is declared on the <code>Installer</code> trait and implemented three times, but no CLI subcommand ever calls it. All of that code is unreachable. Users have no supported way to remove an agent, and no way to discover what a previous install put on their disk.</p>
+          <p class="fbody fix"><b>Fix</b> Wire the command — but base it on the install ledger (ARC-04) rather than on guessed paths, so it removes exactly what was written.</p>
+          <span class="ev">src/installers/mod.rs:47-48 · src/cli/mod.rs:24-46</span>
+        </div>
+      </div>
+
+      <div class="finding sev-m">
+        <div class="fid">BUG&#8209;08<br><span class="sev">Medium</span></div>
+        <div>
+          <p class="ftitle">Codex uninstall targets a path that never exists</p>
+          <p class="fbody">Skills are installed under <code>~/.codex/skills/&lt;skill-name&gt;/</code>, but uninstall removes <code>~/.codex/skills/&lt;agent-name&gt;/</code>. Since an agent's skills are named independently of the agent, the deletion is a no-op in every realistic case. The source comment acknowledges this.</p>
+          <p class="fbody fix"><b>Fix</b> Subsumed by the ledger — record the exact paths written and remove those.</p>
+          <span class="ev">src/installers/codex.rs:283-294</span>
+        </div>
+      </div>
+
+      <div class="finding sev-m">
+        <div class="fid">BUG&#8209;09<br><span class="sev">Medium</span></div>
+        <div>
+          <p class="ftitle">Malformed frontmatter silently becomes an empty skill</p>
+          <p class="fbody"><code>parse_skill_md</code> swallows YAML errors with <code>unwrap_or_else</code>, producing a skill with no description and no metadata rather than reporting the problem. Since the description is what makes a skill discoverable to the agent, the skill installs and then never gets selected. The hand-rolled frontmatter splitter also mishandles a body that itself contains <code>\n---</code>.</p>
+          <p class="fbody fix"><b>Fix</b> Propagate the parse error with line context; validate that required fields are present.</p>
+          <span class="ev">src/core/registry.rs:155-196</span>
+        </div>
+      </div>
+
+      <div class="finding sev-m">
+        <div class="fid">BUG&#8209;10<br><span class="sev">Medium</span></div>
+        <div>
+          <p class="ftitle"><code>ax init</code> never detects Codex</p>
+          <p class="fbody">Init probes Claude, Cursor and VS Code. Codex is a fully supported install target and <code>paths::codex_config_dir()</code> already exists, but init neither detects it nor can ever select it as the default target. VS Code, conversely, is detected but is not a valid target.</p>
+          <p class="fbody fix"><b>Fix</b> Drive detection from the target enum so adding a target updates init automatically.</p>
+          <span class="ev">src/cli/commands/init.rs:171-189 · utils/paths.rs:400</span>
+        </div>
+      </div>
+
+      <div class="finding sev-l">
+        <div class="fid">BUG&#8209;11<br><span class="sev">Low</span></div>
+        <div>
+          <p class="ftitle"><code>ax --version</code> reports the wrong version</p>
+          <p class="fbody">Four sources disagree: <code>Cargo.toml</code> says 1.5.0, the clap attribute hardcodes 1.3.0, the README badge says 1.0.0, and <code>install.sh</code> falls back to v1.3.0 when the GitHub API call fails. Bug reports will carry the wrong version.</p>
+          <p class="fbody fix"><b>Fix</b> <code>#[command(version = env!("CARGO_PKG_VERSION"))]</code>, and have the release script be the only thing that writes a version number.</p>
+          <span class="ev">src/cli/mod.rs:13 · Cargo.toml:3 · install.sh:48-52 · README.md:6</span>
+        </div>
+      </div>
+
+      <div class="finding sev-l">
+        <div class="fid">BUG&#8209;12<br><span class="sev">Low</span></div>
+        <div>
+          <p class="ftitle">Codex reports installing an identity it never installs</p>
+          <p class="fbody"><code>CodexInstaller::install_identity</code> returns <code>Ok(())</code> without writing anything, and the install command unconditionally prints &ldquo;✓ Identity installed&rdquo;. The system prompt is genuinely dropped on the floor for Codex — the agent's whole persona is lost — and the output claims otherwise.</p>
+          <p class="fbody fix"><b>Fix</b> The capability model (ARC-07): a renderer declares what it supports, and the CLI reports skipped steps as skipped.</p>
+          <span class="ev">src/installers/codex.rs:177-182 · cli/commands/install.rs:63-65</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="architecture">
+    <p class="eyebrow">Register 03 — Architecture</p>
+    <h2>What is missing rather than wrong</h2>
+
+    <div class="register">
+
+      <div class="finding sev-h">
+        <div class="fid">ARC&#8209;01<br><span class="sev">High</span></div>
+        <div>
+          <p class="ftitle">The catalog is compiled into the binary</p>
+          <p class="fbody">321 of <code>registry.rs</code>'s 526 lines are hardcoded <code>AgentConfig</code> literals — three agents with their full system prompts, skills and MCP entries, as Rust string constants. Changing a description requires a release. This is also why the file reads as the oldest part of the codebase: it is a demo fixture that became load-bearing. The <code>registry/</code> directory in the repo is empty.</p>
+          <p class="fbody fix"><b>Fix</b> Move all three to the <code>ax-agents</code> repo. Keep at most a tiny embedded fallback index for offline first-run, clearly labelled as such.</p>
+          <span class="ev">src/core/registry.rs:199-519 · registry/ (empty)</span>
+        </div>
+      </div>
+
+      <div class="finding sev-h">
+        <div class="fid">ARC&#8209;02<br><span class="sev">High</span></div>
+        <div>
+          <p class="ftitle">The registry protocol is URL guessing</p>
+          <p class="fbody">Resolution is a sequence of speculative GETs: try <code>{base}/agents/{name}.yaml</code>, then <code>{base}/{name}/SKILL.md</code>, then the built-ins. There is no index, so there is no search, no pagination, no listing of a skill's files, no metadata, and no way to know whether a name exists before fetching it. Every one of the scalability limits below traces back to this.</p>
+          <p class="fbody fix"><b>Fix</b> A versioned <code>index.json</code> with per-version manifests. Format below.</p>
+          <span class="ev">src/core/registry.rs:36-95</span>
+        </div>
+      </div>
+
+      <div class="finding sev-h">
+        <div class="fid">ARC&#8209;03<br><span class="sev">High</span></div>
+        <div>
+          <p class="ftitle">Versions are parsed and then ignored</p>
+          <p class="fbody"><code>AgentConfig.version</code> is deserialized, displayed, and never used for anything. <code>fetch_agent</code> always retrieves whatever is at HEAD of the registry's main branch. You cannot install a specific version, cannot reproduce yesterday's install, and cannot roll back. For a tool positioning itself as npm-for-agents this is the defining missing feature.</p>
+          <p class="fbody fix"><b>Fix</b> <code>ax install name@1.2.0</code> with semver range resolution against the index, recorded in the ledger.</p>
+          <span class="ev">src/core/registry.rs:61-95 · core/agent.rs:14</span>
+        </div>
+      </div>
+
+      <div class="finding sev-h">
+        <div class="fid">ARC&#8209;04<br><span class="sev">High</span></div>
+        <div>
+          <p class="ftitle">No record of what was installed</p>
+          <p class="fbody">Nothing on disk states which agents are installed, at what version, from which registry, to which target, or which files were written. That single gap is why uninstall must guess (BUG-07, BUG-08), why there can be no <code>ax update</code>, no <code>ax list --installed</code>, no drift detection, and no clean reinstall.</p>
+          <p class="fbody fix"><b>Fix</b> <code>~/.ax/state.json</code> — an install ledger keyed by (target, agent), recording version, source URL, digest, timestamp and the full list of written paths.</p>
+          <span class="ev">architectural — no such module exists</span>
+        </div>
+      </div>
+
+      <div class="finding sev-m">
+        <div class="fid">ARC&#8209;05<br><span class="sev">Medium</span></div>
+        <div>
+          <p class="ftitle">Install is three independent writes, not a transaction</p>
+          <p class="fbody">Identity, skills and tools are installed in sequence with <code>?</code> on each. A network failure while downloading skill assets leaves an identity file on disk, no skills, no MCP config, and no rollback — and because there is no ledger, no way to detect or repair the half-state.</p>
+          <p class="fbody fix"><b>Fix</b> Stage the complete rendered output into a temp directory, verify it, then commit with atomic renames and a journal that can be replayed backwards.</p>
+          <span class="ev">src/cli/commands/install.rs:62-122</span>
+        </div>
+      </div>
+
+      <div class="finding sev-m">
+        <div class="fid">ARC&#8209;06<br><span class="sev">Medium</span></div>
+        <div>
+          <p class="ftitle">Roughly 120 lines duplicated between two installers</p>
+          <p class="fbody"><code>generate_skill_md</code>, <code>copy_skill_subdirectories</code>, <code>copy_dir_recursive</code>, <code>download_skill_subdirectories</code> and <code>download_remote_file</code> exist in near-identical form in <code>claude.rs</code> and <code>codex.rs</code>, including the same hardcoded filename list. Every fix has to be applied twice, and one has already drifted — Codex falls back to the agent description, Claude does not.</p>
+          <p class="fbody fix"><b>Fix</b> An <code>installers/common.rs</code> for skill rendering and materialization; keep only the genuinely target-specific layout in each adapter.</p>
+          <span class="ev">src/installers/claude.rs:182-300 ↔ codex.rs:50-173</span>
+        </div>
+      </div>
+
+      <div class="finding sev-m">
+        <div class="fid">ARC&#8209;07<br><span class="sev">Medium</span></div>
+        <div>
+          <p class="ftitle">The installer trait cannot express what a target supports</p>
+          <p class="fbody">All three targets implement the same four methods, and the ones a target does not support return <code>Ok(())</code> — which the caller cannot distinguish from success. Codex has no agent concept, Cursor has no skills directory and no project/global distinction in the way Claude does. Adding a fifth target means another set of silent stubs.</p>
+          <p class="fbody fix"><b>Fix</b> A <code>Capabilities</code> struct the renderer returns; the orchestrator plans only supported steps and reports the rest as explicitly skipped.</p>
+          <span class="ev">src/installers/mod.rs:36-49 · codex.rs:177-182</span>
+        </div>
+      </div>
+
+      <div class="finding sev-m">
+        <div class="fid">ARC&#8209;08<br><span class="sev">Medium</span></div>
+        <div>
+          <p class="ftitle">No error taxonomy — <code>thiserror</code> is a dependency that is never used</p>
+          <p class="fbody">Everything is <code>anyhow</code>, including in the library crate that external code consumes. Callers cannot distinguish &ldquo;agent not found&rdquo; from &ldquo;network down&rdquo; from &ldquo;bad YAML&rdquo;, so the CLI cannot vary its message or its exit code — every failure exits 1. That makes <code>ax</code> unscriptable in CI.</p>
+          <p class="fbody fix"><b>Fix</b> A <code>thiserror</code> enum in the library (<code>NotFound</code>, <code>Network</code>, <code>Parse</code>, <code>Integrity</code>, <code>Io</code>, <code>Denied</code>); keep <code>anyhow</code> at the binary edge; map variants to distinct exit codes.</p>
+          <span class="ev">Cargo.toml:38 · src/ (no thiserror import anywhere)</span>
+        </div>
+      </div>
+
+      <div class="finding sev-m">
+        <div class="fid">ARC&#8209;09<br><span class="sev">Medium</span></div>
+        <div>
+          <p class="ftitle">No caching — every command is a cold network round-trip</p>
+          <p class="fbody"><code>ax list</code> always hits the network. Installing the same agent to two targets downloads everything twice. There is no ETag or <code>If-None-Match</code> handling, no offline mode, and no content-addressed store. On an unauthenticated GitHub endpoint this also runs straight into rate limiting.</p>
+          <p class="fbody fix"><b>Fix</b> <code>~/.ax/cache/</code> keyed by digest, with ETag revalidation on the index and an <code>--offline</code> flag.</p>
+          <span class="ev">src/core/registry.rs:36-57</span>
+        </div>
+      </div>
+
+      <div class="finding sev-m">
+        <div class="fid">ARC&#8209;10<br><span class="sev">Medium</span></div>
+        <div>
+          <p class="ftitle">No machine-readable output and no dry run</p>
+          <p class="fbody">There is no <code>--json</code>, no <code>--dry-run</code>, no <code>--quiet</code> and no <code>--yes</code>. The <code>verbose</code> field in the config file is never read anywhere in the codebase. Progress is printed with <code>println!</code> interleaved with spinner output, so redirecting to a file produces control codes. A package manager that cannot be driven non-interactively cannot be put in a Dockerfile or a CI job.</p>
+          <p class="fbody fix"><b>Fix</b> One output abstraction with human and JSON renderers; detect TTY; global <code>-v/-q/--json/--yes/--dry-run</code>.</p>
+          <span class="ev">src/core/config.rs:191 · src/cli/mod.rs:16-21</span>
+        </div>
+      </div>
+
+      <div class="finding sev-l">
+        <div class="fid">ARC&#8209;11<br><span class="sev">Low</span></div>
+        <div>
+          <p class="ftitle">The APM→AX rename left stale identifiers</p>
+          <p class="fbody">The public type is still <code>ApmConfig</code>, its doc comment points at <code>~/.apm/config.toml</code> which no longer exists, and the command modules are headed <code>apm init</code> / <code>apm install</code>. Small, but it is the first thing a new contributor reads.</p>
+          <p class="fbody fix"><b>Fix</b> Rename to <code>AxConfig</code> with a deprecated alias; sweep the doc comments.</p>
+          <span class="ev">src/core/config.rs:172-182 · cli/commands/init.rs:1 · install.rs:1 · list.rs:1</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="supplychain">
+    <p class="eyebrow">Register 04 — Build &amp; supply chain</p>
+    <h2>Nothing verifies the thing users actually run</h2>
+
+    <div class="register">
+
+      <div class="finding sev-h">
+        <div class="fid">OPS&#8209;01<br><span class="sev">High</span></div>
+        <div>
+          <p class="ftitle"><code>Cargo.lock</code> is gitignored on a binary crate</p>
+          <p class="fbody">Line 2 of <code>.gitignore</code>. For a published binary this is the wrong default: builds are not reproducible, dependency versions drift silently between a developer's machine and the release runner, and <code>cargo audit</code> has no lockfile to audit. The release script even tries to <code>git add Cargo.lock</code>, which is a no-op today.</p>
+          <p class="fbody fix"><b>Fix</b> Remove the line, commit the lockfile.</p>
+          <span class="ev">.gitignore:2 · scripts/release.sh:68</span>
+        </div>
+      </div>
+
+      <div class="finding sev-h">
+        <div class="fid">OPS&#8209;02<br><span class="sev">High</span></div>
+        <div>
+          <p class="ftitle">No CI on push or pull request</p>
+          <p class="fbody"><code>release.yml</code> is the only workflow and it triggers solely on tags. It runs no tests, no clippy and no <code>fmt --check</code>. Every release ships code that has never been verified by anything but a local build, and a broken commit on main is invisible until someone tags it.</p>
+          <p class="fbody fix"><b>Fix</b> A <code>ci.yml</code> on push and PR: fmt, clippy <code>-D warnings</code>, test, build on all three platforms, plus <code>cargo-audit</code>.</p>
+          <span class="ev">.github/workflows/ (one file)</span>
+        </div>
+      </div>
+
+      <div class="finding sev-h">
+        <div class="fid">OPS&#8209;03<br><span class="sev">High</span></div>
+        <div>
+          <p class="ftitle">Releases publish no checksums and no attestation</p>
+          <p class="fbody">Five raw binaries are uploaded with <code>generate_release_notes</code> and nothing else. There is no <code>SHA256SUMS</code> file, no signature, and no provenance attestation, so neither <code>install.sh</code> nor a careful human can verify a download.</p>
+          <p class="fbody fix"><b>Fix</b> Generate <code>SHA256SUMS</code> in the release job and add <code>actions/attest-build-provenance</code>.</p>
+          <span class="ev">.github/workflows/release.yml:73-100</span>
+        </div>
+      </div>
+
+      <div class="finding sev-h">
+        <div class="fid">OPS&#8209;04<br><span class="sev">High</span></div>
+        <div>
+          <p class="ftitle"><code>install.sh</code> verifies nothing before <code>sudo mv</code></p>
+          <p class="fbody">The script curls a binary and moves it into <code>/usr/local/bin</code> with sudo, with no checksum check. It also lacks <code>set -o pipefail</code>, silently falls back to a hardcoded v1.3.0 when the GitHub API call fails or is rate-limited, and pipes through <code>| bash</code> in the documented one-liner.</p>
+          <p class="fbody fix"><b>Fix</b> Fetch <code>SHA256SUMS</code>, verify, then install. Fail closed on version detection instead of falling back to a stale tag.</p>
+          <span class="ev">install.sh:44-79</span>
+        </div>
+      </div>
+
+      <div class="finding sev-m">
+        <div class="fid">OPS&#8209;05<br><span class="sev">Medium</span></div>
+        <div>
+          <p class="ftitle">Three tests for 2,357 lines, and the test harness is unused</p>
+          <p class="fbody">Two of the three tests assert that <code>ls</code> exists and that a hint lookup works. <code>assert_cmd</code>, <code>predicates</code> and <code>tempfile</code> are all declared as dev-dependencies and imported nowhere — the integration test scaffolding was set up and never used. Nothing tests an installer, a path resolution, or a registry response.</p>
+          <p class="fbody fix"><b>Fix</b> Golden-file tests over the renderers, a <code>wiremock</code> registry fixture, and end-to-end <code>assert_cmd</code> runs against a <code>tempfile</code> HOME.</p>
+          <span class="ev">Cargo.toml:44-47 · src/core/agent.rs:140 · utils/validation.rs:281</span>
+        </div>
+      </div>
+
+      <div class="finding sev-m">
+        <div class="fid">OPS&#8209;06<br><span class="sev">Medium</span></div>
+        <div>
+          <p class="ftitle"><code>cross</code> is installed unpinned from git HEAD</p>
+          <p class="fbody"><code>cargo install cross --git https://github.com/cross-rs/cross</code> builds whatever is on that branch on release day — a build-time supply-chain dependency on a moving target, compiled from source on every run with no cache.</p>
+          <p class="fbody fix"><b>Fix</b> Pin a tag, or use <code>taiki-e/setup-cross-toolchain-action</code>. Add <code>Swatinem/rust-cache</code>.</p>
+          <span class="ev">.github/workflows/release.yml:45-47</span>
+        </div>
+      </div>
+
+      <div class="finding sev-m">
+        <div class="fid">OPS&#8209;07<br><span class="sev">Medium</span></div>
+        <div>
+          <p class="ftitle">Deprecated and outdated dependencies</p>
+          <p class="fbody"><code>serde_yaml</code> resolves to <code>0.9.34+deprecated</code> — the crate is unmaintained and its version string says so. <code>reqwest 0.11</code> pulls <code>hyper 0.14</code>, a full major version behind. YAML parsing is the primary attack surface for untrusted registry input, so it is the wrong place to run unmaintained code.</p>
+          <p class="fbody fix"><b>Fix</b> Migrate to <code>serde_norway</code> or <code>serde_yaml_ng</code>; move to <code>reqwest 0.12</code>.</p>
+          <span class="ev">Cargo.toml:24,30</span>
+        </div>
+      </div>
+
+      <div class="finding sev-m">
+        <div class="fid">OPS&#8209;08<br><span class="sev">Medium</span></div>
+        <div>
+          <p class="ftitle">The Windows binary is built but unreachable</p>
+          <p class="fbody">The release matrix produces <code>ax-windows-x64.exe</code>, but <code>install.sh</code> has no Windows branch and there is no PowerShell installer. Windows users have no documented install path short of building from source — on a project whose own development happens on Windows.</p>
+          <p class="fbody fix"><b>Fix</b> An <code>install.ps1</code> with the same checksum verification, plus winget or scoop.</p>
+          <span class="ev">install.sh:24-42 · release.yml:32-34</span>
+        </div>
+      </div>
+
+      <div class="finding sev-l">
+        <div class="fid">OPS&#8209;09<br><span class="sev">Low</span></div>
+        <div>
+          <p class="ftitle">No dependency monitoring and no published crate</p>
+          <p class="fbody">No <code>cargo-deny</code>, no <code>cargo-audit</code>, no Dependabot. The crate metadata is complete and ready for crates.io, but the README tells users to <code>cargo install ax</code>, which installs an unrelated crate.</p>
+          <p class="fbody fix"><b>Fix</b> <code>deny.toml</code> plus Dependabot; publish to crates.io or correct the README.</p>
+          <span class="ev">Cargo.toml:1-11 · README.md:44</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="target">
+    <p class="eyebrow">Target architecture</p>
+    <h2>Ports and adapters, with a transaction in the middle</h2>
+    <p class="lede">The current layering is close — <code>cli</code>, <code>core</code>, <code>installers</code>, <code>utils</code> — but <code>core</code> reaches for the network and <code>installers</code> reach for it too, so there is no seam to test against and no place to put integrity checks. Moving I/O behind ports fixes both.</p>
+
+    <div class="stack">
+      <div class="layer">
+        <span class="lname">cli/</span>
+        <span class="ldesc">clap surface, TTY detection, exit-code mapping, and two output renderers — human and <code>--json</code>. No business logic.</span>
+      </div>
+      <div class="flow">↓</div>
+      <div class="layer">
+        <span class="lname">app/</span>
+        <span class="ldesc">Command orchestration: <code>install</code>, <code>uninstall</code>, <code>update</code>, <code>list</code>, <code>sync</code>. Owns the <code>InstallSession</code> — plan, stage, verify, commit, roll back.</span>
+      </div>
+      <div class="flow">↓</div>
+      <div class="layer">
+        <span class="lname">domain/</span>
+        <span class="ldesc">Pure types, no I/O: <code>SafeName</code>, <code>Version</code>, <code>Digest</code>, <code>Manifest</code>, <code>Capabilities</code>, <code>TrustPolicy</code>, <code>Ledger</code>, and the resolver. This is where every validation boundary lives, and it is unit-testable without a network.</span>
+      </div>
+      <div class="flow">↓</div>
+      <div class="layer ports">
+        <span class="lname">ports/</span>
+        <span class="ldesc"><code>RegistrySource</code> · <code>Renderer</code> · <code>Workspace</code> · <code>Prompt</code> — four traits. Everything above depends only on these.</span>
+      </div>
+      <div class="flow">↓</div>
+      <div class="layer">
+        <span class="lname">adapters/</span>
+        <span class="ldesc"><code>HttpRegistry</code> wrapped in <code>CachedRegistry</code>, plus <code>LocalRegistry</code> for testing and private use · <code>ClaudeRenderer</code> / <code>CursorRenderer</code> / <code>CodexRenderer</code> over a shared <code>skill</code> module · <code>AtomicFs</code> · <code>TtyPrompt</code>.</span>
+      </div>
+    </div>
+
+    <h3>The registry index that unblocks everything</h3>
+    <p>One format change closes SEC-01, SEC-03, BUG-03, ARC-02, ARC-03 and ARC-09 simultaneously, because it turns resolution from guesswork into a lookup with an explicit, verifiable file list.</p>
+
+<pre><i>// ax-agents/index.json — fetched once, ETag-revalidated, cached</i>
+{
+  <b>"schema"</b>: 1,
+  <b>"updated"</b>: "2026-08-26T09:14:00Z",
+  <b>"agents"</b>: [{
+    <b>"name"</b>: "rust-architect",
+    <b>"latest"</b>: "1.2.0",
+    <b>"description"</b>: "Senior Rust systems engineer…",
+    <b>"versions"</b>: [{
+      <b>"version"</b>: "1.2.0",
+      <b>"manifest"</b>: "agents/rust-architect/1.2.0/agent.yaml",
+      <b>"digest"</b>: "sha256:9f2c1a…",        <em>← verified after fetch</em>
+      <b>"files"</b>: [                          <em>← replaces the guess-list</em>
+        { "path": "skills/tokio-patterns/SKILL.md",
+          "digest": "sha256:41ab7e…", "size": 2913 },
+        { "path": "skills/tokio-patterns/scripts/lint.py",
+          "digest": "sha256:c07e91…", "size": 1180, "exec": true }
+      ],
+      <b>"mcp"</b>: [                             <em>← shown at the trust gate</em>
+        { "name": "context7", "command": "npx",
+          "args": ["-y", "@upstash/context7-mcp"] }
+      ]
+    }]
+  }]
+}</pre>
+
+    <h3>The install pipeline</h3>
+<pre><b>resolve</b>   name@range → index lookup → concrete version
+          <i>fails closed: unknown name is an error, never a demo fallback</i>
+
+<b>fetch</b>     manifest + files, concurrently, through the cache
+          <i>every response checked against its declared digest</i>
+
+<b>gate</b>      print each MCP command and each executable file
+          <i>confirm unless --yes or the command is allowlisted</i>
+
+<b>stage</b>     render per target into $TMP/ax-&lt;uuid&gt;/
+          <i>SafeName has already made traversal unrepresentable</i>
+
+<b>commit</b>    fsync → rename → append to ~/.ax/state.json
+          <i>any failure replays the journal backwards</i></pre>
+
+    <div class="note">
+      <b>Why the trust gate matters more than the digest.</b> Digests prove the file is what the registry published; they say nothing about whether the registry should be trusted. Since installing an agent authorizes a command to run on the user's machine, that authorization has to be visible at least once. Showing the command and requiring a keypress is the difference between a package manager and a remote-execution service.
+    </div>
+  </section>
+
+  <section id="roadmap">
+    <p class="eyebrow">Sequencing</p>
+    <h2>Five phases, ordered by what unblocks what</h2>
+    <p class="lede">P0 is containment and can ship as a patch release without touching the architecture. P2 is the phase that turns <code>ax</code> into an actual package manager; everything before it exists to make P2 safe to build on.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Phase</th><th>Scope</th><th>Closes</th><th>Estimate</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="ph">P0</td>
+            <td><b>Contain.</b> <code>SafeName</code> at every boundary; TOML via the <code>toml</code> crate; atomic writes with backup; stop discarding unparseable configs; HTTPS-only registry; request timeouts; UTF-8-safe truncation; masked key prompt and <code>0600</code>; drop the fake-catalog fallback; version from <code>env!</code>; commit the lockfile.</td>
+            <td class="ids">SEC-02 · SEC-04 · SEC-05<br>SEC-06 · SEC-07 · SEC-08<br>BUG-01 · BUG-04 · BUG-11<br>OPS-01</td>
+            <td class="dur">1–2 days</td>
+          </tr>
+          <tr>
+            <td class="ph">P1</td>
+            <td><b>Foundation.</b> <code>thiserror</code> taxonomy and exit codes; extract <code>installers/common</code>; capability model; the install ledger; wire <code>ax uninstall</code>; global <code>-v/-q/--json/--yes/--dry-run</code>; fix <code>--global</code>; init detects Codex and merges rather than overwrites; CI with fmt, clippy <code>-D warnings</code>, tests; first integration tests against a temp HOME.</td>
+            <td class="ids">BUG-02 · BUG-06 · BUG-07<br>BUG-08 · BUG-10 · BUG-12<br>ARC-04 · ARC-06 · ARC-07<br>ARC-08 · ARC-10 · ARC-11<br>OPS-02 · OPS-05</td>
+            <td class="dur">~1 week</td>
+          </tr>
+          <tr>
+            <td class="ph">P2</td>
+            <td><b>Registry v1.</b> Index and manifest format; digest verification end to end; the MCP trust gate; <code>name@version</code> resolution; content-addressed cache with ETag revalidation and <code>--offline</code>; async installers with concurrent fetch; move the three built-in agents into the registry repo.</td>
+            <td class="ids">SEC-01 · SEC-03<br>BUG-03 · BUG-05 · BUG-09<br>ARC-01 · ARC-02 · ARC-03<br>ARC-05 · ARC-09</td>
+            <td class="dur">1–2 weeks</td>
+          </tr>
+          <tr>
+            <td class="ph">P3</td>
+            <td><b>Supply chain.</b> <code>SHA256SUMS</code> and build provenance attestation; <code>install.sh</code> verifies before installing; <code>install.ps1</code> for Windows; pin <code>cross</code> and add build caching; migrate off <code>serde_yaml</code>; <code>reqwest</code> 0.12; <code>cargo-deny</code>, <code>cargo-audit</code> and Dependabot; publish to crates.io.</td>
+            <td class="ids">OPS-03 · OPS-04 · OPS-06<br>OPS-07 · OPS-08 · OPS-09</td>
+            <td class="dur">3–5 days</td>
+          </tr>
+          <tr>
+            <td class="ph">P4</td>
+            <td><b>Product.</b> <code>ax search</code>, <code>ax create</code>, <code>ax publish</code>, <code>ax update</code>; a project-scoped <code>ax.toml</code> with <code>ax.lock</code> and <code>ax sync</code> so a repo can pin its agent set the way it pins its dependencies; private registries with auth; VS Code as a fourth target.</td>
+            <td class="ids">roadmap items from README<br>plus the multi-registry story</td>
+            <td class="dur">ongoing</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Two decisions worth making before P2</h3>
+    <ul class="tight">
+      <li><b>Is the registry a git repo or a service?</b> Raw-GitHub is free, cacheable and needs no operations, but it cannot do search, download counts, or namespaced publishing — and it is why resolution is guesswork today. A signed static index on a CDN keeps the zero-ops property while removing the guessing; a service is only worth it once <code>ax publish</code> exists. Recommendation: static signed index now, service at P4 if publishing takes off.</li>
+      <li><b>Does an agent get to ship executable scripts?</b> Today it does, silently. The honest options are to keep it behind the trust gate with the executable files listed explicitly, or to drop <code>scripts/</code> and make skills declarative-only. The first is more useful; the second is far easier to secure. Deciding this changes how much of the trust gate needs to exist.</li>
+    </ul>
+  </section>
+
+  <footer>
+    ax v1.5.0 · audit performed 2026-08-26 · 19 Rust source files, 2,357 lines · findings derived by reading the code at HEAD 8a12ef3<br>
+    Line references are accurate as of that commit. Scope: CLI only. Cursor was dropped from the product on 2026-08-26; findings that cited <code>cursor.rs</code> keep that evidence for reference but the file is slated for deletion. The <code>landing/</code> Next.js app was excluded.
+  </footer>
+
+</div>
