@@ -1,58 +1,94 @@
 //! Installer Module
 //!
-//! Trait-based adapter pattern for installing agents to different editors.
+//! Adapter per target editor. AX targets Claude Code and Codex only: both speak
+//! the Agent Skills standard, which lets them share one skill renderer and
+//! differ only in where files land and which surfaces they support.
 
 mod claude;
-mod cursor;
 mod codex;
+pub mod common;
 
 use anyhow::Result;
 
 pub use claude::ClaudeInstaller;
-pub use cursor::CursorInstaller;
 pub use codex::CodexInstaller;
 
 use crate::core::agent::AgentConfig;
+use crate::utils::paths::Scope;
 
-/// Target editor for installation
+/// Target editor for installation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Target {
     Claude,
-    Cursor,
     Codex,
 }
 
 impl Target {
-    /// Get the display name for the target
     pub fn display_name(&self) -> &'static str {
         match self {
             Target::Claude => "Claude Code",
-            Target::Cursor => "Cursor",
             Target::Codex => "Codex",
         }
     }
+
+    pub fn slug(&self) -> &'static str {
+        match self {
+            Target::Claude => "claude-code",
+            Target::Codex => "codex",
+        }
+    }
+
+    pub fn all() -> [Target; 2] {
+        [Target::Claude, Target::Codex]
+    }
 }
 
-/// Installer trait - the adapter pattern for different editors
+/// What a target can actually be given.
+///
+/// Replaces the previous pattern of implementing every step on every target and
+/// returning `Ok(())` from the ones that do nothing, which reported success for
+/// work that never happened.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Capabilities {
+    /// Dedicated subagent files with their own system prompt.
+    pub subagents: bool,
+    /// Agent Skills directories.
+    pub skills: bool,
+    /// MCP server configuration.
+    pub mcp: bool,
+    /// Installation into a project directory as well as the user's home.
+    pub project_scope: bool,
+}
+
+/// Installer trait — the adapter for a target editor.
 pub trait Installer: Send + Sync {
-    /// Install the agent's identity (system prompt)
+    /// What this target supports.
+    fn capabilities(&self) -> Capabilities;
+
+    /// Install the agent's identity (system prompt) as a subagent.
+    ///
+    /// Only called when `capabilities().subagents` is true.
     fn install_identity(&self, agent: &AgentConfig) -> Result<()>;
 
-    /// Install the agent's skills (knowledge base)
+    /// Install the agent's skills.
     fn install_skills(&self, agent: &AgentConfig) -> Result<()>;
 
-    /// Install the agent's MCP tools
+    /// Install the agent's MCP servers.
+    ///
+    /// Only called when `capabilities().mcp` is true.
     fn install_tools(&self, agent: &AgentConfig) -> Result<()>;
 
-    /// Uninstall an agent by name
+    /// Remove an agent by name.
     fn uninstall(&self, agent_name: &str) -> Result<()>;
+
+    /// Human-readable description of where this installer writes.
+    fn location(&self) -> String;
 }
 
-/// Get the appropriate installer for a target
-pub fn get_installer(target: Target, global: bool) -> Box<dyn Installer> {
+/// Get the installer for a target and scope.
+pub fn get_installer(target: Target, scope: Scope) -> Box<dyn Installer> {
     match target {
-        Target::Claude => Box::new(ClaudeInstaller::new(global)),
-        Target::Cursor => Box::new(CursorInstaller::new(global)),
-        Target::Codex => Box::new(CodexInstaller::new(global)),
+        Target::Claude => Box::new(ClaudeInstaller::new(scope)),
+        Target::Codex => Box::new(CodexInstaller::new(scope)),
     }
 }

@@ -1,67 +1,103 @@
-//! `apm init` Command
-//!
-//! Detects installed editors and creates APM configuration.
+//! `ax init` — detect installed agents and write AX configuration.
 
 use anyhow::Result;
 use colored::Colorize;
-use std::path::PathBuf;
 
 use crate::core::config::ApmConfig;
-use crate::utils::paths;
+use crate::installers::Target;
+use crate::utils::paths::{self, Scope};
 use crate::utils::ui;
 
-/// Execute the init command
 pub async fn execute() -> Result<()> {
     ui::print_header("AX Initialization");
 
-    // Detect installed editors
-    println!("{} Detecting installed editors...\n", "→".cyan());
+    println!("{} Detecting agents...\n", "→".cyan());
 
-    let claude_installed = detect_claude();
-    let cursor_installed = detect_cursor();
-    let vscode_installed = detect_vscode();
+    let mut detected: Vec<Target> = Vec::new();
 
-    // Print detection results
-    print_editor_status("Claude Code", claude_installed, paths::claude_config_dir());
-    print_editor_status("Cursor", cursor_installed, paths::cursor_config_dir());
-    print_editor_status("VS Code", vscode_installed, None);
+    for target in Target::all() {
+        let (found, location) = match target {
+            Target::Claude => (
+                paths::claude_detected(),
+                paths::claude_skills_dir(Scope::User).ok(),
+            ),
+            Target::Codex => (
+                paths::codex_detected(),
+                paths::codex_skills_dir(Scope::User).ok(),
+            ),
+        };
+
+        if found {
+            detected.push(target);
+        }
+
+        let mark = if found {
+            "✓".green().bold()
+        } else {
+            "✗".red().bold()
+        };
+        let status = if found {
+            "detected".green()
+        } else {
+            "not found".dimmed()
+        };
+
+        print!("  {} {} - {}", mark, target.display_name().bold(), status);
+        if found {
+            if let Some(path) = location {
+                print!(" ({})", path.display().to_string().dimmed());
+            }
+        }
+        println!();
+    }
 
     println!();
 
-    // Determine default target
-    let default_target = if claude_installed {
-        "claude"
-    } else if cursor_installed {
-        "cursor"
-    } else {
-        "claude" // Default to claude even if not detected
-    };
+    if detected.is_empty() {
+        ui::print_warning("No supported agent detected.");
+        println!(
+            "  {} AX targets Claude Code and Codex. Install one, then re-run {}.",
+            "→".cyan(),
+            "ax init".cyan().bold()
+        );
+    }
 
-    // Create config
-    let config = ApmConfig::new(default_target.to_string());
+    // Preserve an existing configuration. Re-running init previously reset a
+    // customized registry URL back to the default.
     let config_path = paths::ax_config_path()?;
+    let existed = config_path.exists();
 
-    // Ensure config directory exists
+    let mut config = ApmConfig::load_or_default()?;
+    if let Some(first) = detected.first() {
+        config.default_target = first.slug().to_string();
+    }
+
     if let Some(parent) = config_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-
-    // Write config
     config.save(&config_path)?;
 
     println!(
-        "{} Created configuration at {}",
+        "{} {} {}",
         "✓".green().bold(),
+        if existed { "Updated" } else { "Created" },
         config_path.display().to_string().cyan()
     );
     println!(
-        "{} Default target set to: {}",
+        "{} Default target: {}",
         "✓".green().bold(),
-        default_target.cyan().bold()
+        config.default_target.cyan().bold()
     );
+    if existed {
+        println!(
+            "  {} Existing registry URL kept: {}",
+            "·".dimmed(),
+            config.registry_url.dimmed()
+        );
+    }
 
     println!();
-    ui::print_success("AX initialized successfully!");
+    ui::print_success("AX initialized.");
     println!(
         "\n  Run {} to see available agents.",
         "ax list".cyan().bold()
@@ -69,48 +105,3 @@ pub async fn execute() -> Result<()> {
 
     Ok(())
 }
-
-fn detect_claude() -> bool {
-    paths::claude_config_dir()
-        .map(|path| path.exists())
-        .unwrap_or(false)
-}
-
-fn detect_cursor() -> bool {
-    paths::cursor_config_dir()
-        .map(|path| path.exists())
-        .unwrap_or_else(|| {
-            // Also check for .cursor in current directory
-            PathBuf::from(".cursor").exists()
-        })
-}
-
-fn detect_vscode() -> bool {
-    // Check if code command exists
-    which::which("code").is_ok()
-}
-
-fn print_editor_status(name: &str, installed: bool, path: Option<PathBuf>) {
-    let status = if installed {
-        "✓".green().bold()
-    } else {
-        "✗".red().bold()
-    };
-
-    let status_text = if installed {
-        "detected".green()
-    } else {
-        "not found".dimmed()
-    };
-
-    print!("  {} {} - {}", status, name.bold(), status_text);
-
-    if installed {
-        if let Some(p) = path {
-            print!(" ({})", p.display().to_string().dimmed());
-        }
-    }
-
-    println!();
-}
-

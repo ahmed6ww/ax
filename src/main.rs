@@ -12,9 +12,15 @@ async fn main() -> Result<()> {
     match cli.command {
         Commands::Init => ax_lib::cli::commands::init::execute().await,
         Commands::List => ax_lib::cli::commands::list::execute().await,
-        Commands::Install { agent, target, global } => {
-            ax_lib::cli::commands::install::execute(&agent, target, global).await
-        }
+        Commands::Install {
+            agent,
+            target,
+            global,
+        } => ax_lib::cli::commands::install::execute(&agent, target, global).await,
+        Commands::Uninstall {
+            agent,
+            target,
+            global,
+        } => ax_lib::cli::commands::uninstall::execute(&agent, target, global).await,
     }
 }
-

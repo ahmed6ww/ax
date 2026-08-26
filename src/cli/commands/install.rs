@@ -1,6 +1,4 @@
-//! `apm install` Command
-//!
-//! Installs an agent configuration into the target editor.
+//! `ax install` — install an agent into Claude Code and/or Codex.
 
 use anyhow::{Context, Result};
 use colored::Colorize;
@@ -8,144 +6,128 @@ use colored::Colorize;
 use crate::core::agent::AgentConfig;
 use crate::core::registry::Registry;
 use crate::installers::{get_installer, Target};
+use crate::utils::paths::Scope;
 use crate::utils::{ui, validation};
 
 use super::super::TargetArg;
 
-/// Execute the install command
-pub async fn execute(agent_name: &str, target: TargetArg, global: bool) -> Result<()> {
-    let target: Target = target.into();
+/// Resolve which targets to act on: the one named, or every detected target.
+fn resolve_targets(target: Option<TargetArg>) -> Result<Vec<Target>> {
+    if let Some(t) = target {
+        return Ok(vec![t.into()]);
+    }
+
+    let detected: Vec<Target> = Target::all()
+        .into_iter()
+        .filter(|t| match t {
+            Target::Claude => crate::utils::paths::claude_detected(),
+            Target::Codex => crate::utils::paths::codex_detected(),
+        })
+        .collect();
+
+    if detected.is_empty() {
+        anyhow::bail!(
+            "No supported agent detected. Install Claude Code or Codex, \
+             or name a target explicitly with --target."
+        );
+    }
+
+    Ok(detected)
+}
+
+pub async fn execute(agent_name: &str, target: Option<TargetArg>, global: bool) -> Result<()> {
+    let targets = resolve_targets(target)?;
+    let scope = Scope::from_global_flag(global);
 
     ui::print_header(&format!("Installing {}", agent_name));
 
-    // Step 1: Fetch agent from registry
     let spinner = ui::create_spinner("Fetching agent configuration...");
-
     let registry = Registry::new();
     let agent: AgentConfig = registry
         .fetch_agent(agent_name)
         .await
-        .context(format!("Agent '{}' not found in registry", agent_name))?;
+        .with_context(|| format!("Could not resolve agent '{}'", agent_name))?;
+    spinner.finish_with_message(format!(
+        "{} Found {} v{}",
+        "✓".green(),
+        agent.name,
+        agent.version
+    ));
 
-    spinner.finish_with_message(format!("{} Found {} v{}", "✓".green(), agent.name, agent.version));
-
-    // Step 2: Validate required tools
     println!("\n{} Checking dependencies...", "→".cyan());
-
-    let missing_tools = validation::check_agent_dependencies(&agent);
-    if !missing_tools.is_empty() {
+    let missing = validation::check_agent_dependencies(&agent);
+    if missing.is_empty() {
+        println!("  {} All dependencies satisfied", "✓".green());
+    } else {
         println!();
-        for tool in &missing_tools {
+        for tool in &missing {
             println!(
                 "  {} {} is required but not found in PATH",
                 "⚠".yellow().bold(),
                 tool.as_str().bold()
             );
-        }
-        println!();
-        println!(
-            "  {} Some MCP tools may not work without these dependencies.",
-            "!".yellow()
-        );
-        println!(
-            "  {} Install missing tools and try again, or continue anyway.",
-            "→".cyan()
-        );
-        println!();
-    } else {
-        println!("  {} All dependencies satisfied", "✓".green());
-    }
-
-    // Step 3: Get the appropriate installer
-    let installer = get_installer(target, global);
-
-    // Step 4: Install identity
-    let spinner = ui::create_spinner("Installing identity (system prompt)...");
-    installer.install_identity(&agent)?;
-    spinner.finish_with_message(format!("{} Identity installed", "✓".green()));
-
-    // Step 5: Install skills
-    if !agent.skills.is_empty() {
-        let spinner = ui::create_spinner(&format!("Installing {} skill(s)...", agent.skills.len()));
-        installer.install_skills(&agent)?;
-        spinner.finish_with_message(format!(
-            "{} {} skill(s) installed",
-            "✓".green(),
-            agent.skills.len()
-        ));
-    }
-
-    // Step 6: Install MCP tools
-    if !agent.mcp.is_empty() {
-        // Clone and mutate agent to add actual API keys
-        let mut agent_with_keys = agent.clone();
-        
-        // Check for MCPs that require API keys and prompt user
-        for tool in &mut agent_with_keys.mcp {
-            if let Some(url) = &tool.setup_url {
-                println!();
-                println!("  {} MCP '{}' requires an API key", "ℹ".blue().bold(), tool.name.bold());
-                println!("  {} Get your API key here: {}", "→".cyan(), url.underline().blue());
-                println!();
-                print!("  {} Paste your API key (or press Enter to skip): ", "?".yellow().bold());
-                
-                // Flush stdout to ensure prompt is shown
-                use std::io::Write;
-                std::io::stdout().flush().ok();
-                
-                // Read API key from user
-                let mut api_key = String::new();
-                if std::io::stdin().read_line(&mut api_key).is_ok() {
-                    let api_key = api_key.trim();
-                    if !api_key.is_empty() {
-                        // Replace placeholder with actual key in env
-                        for (_, value) in tool.env.iter_mut() {
-                            if value.starts_with("${") && value.ends_with("}") {
-                                *value = api_key.to_string();
-                            }
-                        }
-                        println!("  {} API key configured!", "✓".green());
-                    } else {
-                        println!("  {} Skipped - you can configure this later", "→".cyan());
-                    }
-                }
+            if let Some(hint) = validation::get_install_hint(tool) {
+                println!("    {}", hint.dimmed());
             }
         }
-
-        let spinner = ui::create_spinner(&format!("Configuring {} MCP tool(s)...", agent_with_keys.mcp.len()));
-        installer.install_tools(&agent_with_keys)?;
-        spinner.finish_with_message(format!(
-            "{} {} MCP tool(s) configured",
-            "✓".green(),
-            agent_with_keys.mcp.len()
-        ));
+        println!();
     }
 
-    // Success message
+    let agent = super::prompt_for_api_keys(agent)?;
+
+    for target in targets {
+        let installer = get_installer(target, scope);
+        let caps = installer.capabilities();
+
+        println!(
+            "\n  {} {} ({} scope) → {}",
+            "▸".cyan().bold(),
+            target.display_name().bold(),
+            scope.display_name(),
+            installer.location().dimmed()
+        );
+
+        if caps.subagents {
+            installer.install_identity(&agent)?;
+            println!("    {} Subagent installed", "✓".green());
+        } else {
+            println!(
+                "    {} No subagent support — identity installed as a skill",
+                "·".dimmed()
+            );
+        }
+
+        if caps.skills {
+            installer.install_skills(&agent)?;
+            let count = agent.skills.len() + if caps.subagents { 0 } else { 1 };
+            println!("    {} {} skill(s) installed", "✓".green(), count);
+        }
+
+        if !agent.mcp.is_empty() {
+            if caps.mcp {
+                installer.install_tools(&agent)?;
+                println!(
+                    "    {} {} MCP server(s) configured",
+                    "✓".green(),
+                    agent.mcp.len()
+                );
+            } else {
+                println!(
+                    "    {} {} MCP server(s) skipped — not supported by {}",
+                    "·".dimmed(),
+                    agent.mcp.len(),
+                    target.display_name()
+                );
+            }
+        }
+    }
+
     println!();
-    ui::print_success(&format!(
-        "{} installed successfully to {}!",
-        agent.name,
-        target.display_name()
-    ));
-
-    // Print next steps
-    println!("\n  {} Next steps:", "→".cyan());
-    match target {
-        Target::Claude => {
-            println!("    1. Restart Claude Code to load the new agent");
-            println!("    2. The agent will be available in your conversations");
-        }
-        Target::Cursor => {
-            println!("    1. Restart Cursor to load the new rules");
-            println!("    2. The agent context will be available in Composer");
-        }
-        Target::Codex => {
-            println!("    1. Restart Codex to load the new agent");
-            println!("    2. The agent will be available in your conversations");
-        }
-    }
+    ui::print_success(&format!("{} installed.", agent.name));
+    println!(
+        "\n  {} Restart your agent to pick up the new configuration.",
+        "→".cyan()
+    );
 
     Ok(())
 }
-

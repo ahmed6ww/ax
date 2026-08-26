@@ -8,12 +8,12 @@ use crate::installers::Target;
 
 /// AX (Agent Package Manager) - The npm of the Agentic AI era
 ///
-/// Install AI agent configurations into Claude Code, Cursor, and more.
+/// Install AI agent configurations into Claude Code and Codex.
 #[derive(Parser, Debug)]
 #[command(name = "ax")]
 #[command(author = "ahmed6ww")]
-#[command(version = "1.3.0")]
-#[command(about = "Write Once, Run on Claude, Cursor, or Codex", long_about = None)]
+#[command(version = env!("CARGO_PKG_VERSION"))]
+#[command(about = "Keep your team running the same agent setup on Claude Code and Codex", long_about = None)]
 #[command(propagate_version = true)]
 pub struct Cli {
     #[command(subcommand)]
@@ -33,11 +33,25 @@ pub enum Commands {
         /// Name of the agent to install
         agent: String,
 
-        /// Target editor (claude, cursor)
-        #[arg(short, long, value_enum, default_value = "claude")]
-        target: TargetArg,
+        /// Target editor (claude, codex). Omit to install to every detected target.
+        #[arg(short, long, value_enum)]
+        target: Option<TargetArg>,
 
-        /// Install globally (applies to all projects)
+        /// Install for the user instead of this project
+        #[arg(short, long, default_value = "false")]
+        global: bool,
+    },
+
+    /// Remove an installed agent
+    Uninstall {
+        /// Name of the agent to remove
+        agent: String,
+
+        /// Target editor (claude, codex). Omit to remove from every target.
+        #[arg(short, long, value_enum)]
+        target: Option<TargetArg>,
+
+        /// Remove from user scope instead of this project
         #[arg(short, long, default_value = "false")]
         global: bool,
     },
@@ -46,7 +60,6 @@ pub enum Commands {
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum TargetArg {
     Claude,
-    Cursor,
     Codex,
 }
 
@@ -54,7 +67,6 @@ impl From<TargetArg> for Target {
     fn from(arg: TargetArg) -> Self {
         match arg {
             TargetArg::Claude => Target::Claude,
-            TargetArg::Cursor => Target::Cursor,
             TargetArg::Codex => Target::Codex,
         }
     }

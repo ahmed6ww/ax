@@ -9,6 +9,18 @@ use crate::core::agent::AgentInfo;
 use crate::core::registry::Registry;
 use crate::utils::ui;
 
+/// Truncate on a character boundary.
+///
+/// Slicing by byte offset panics when the cut falls inside a multi-byte
+/// character, which any non-ASCII registry description would trigger.
+fn truncate(text: &str, max_chars: usize) -> String {
+    if text.chars().count() <= max_chars {
+        return text.to_string();
+    }
+    let head: String = text.chars().take(max_chars.saturating_sub(3)).collect();
+    format!("{}...", head.trim_end())
+}
+
 /// Execute the list command
 pub async fn execute() -> Result<()> {
     ui::print_header("Available Agents");
@@ -37,11 +49,7 @@ pub async fn execute() -> Result<()> {
 
     // Print agents
     for agent in &agents {
-        let description = if agent.description.len() > 38 {
-            format!("{}...", &agent.description[..35])
-        } else {
-            agent.description.clone()
-        };
+        let description = truncate(&agent.description, 38);
 
         println!(
             "  {:<20} {:<10} {:<40} {}",
@@ -67,3 +75,26 @@ pub async fn execute() -> Result<()> {
     Ok(())
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::truncate;
+
+    #[test]
+    fn leaves_short_text_alone() {
+        assert_eq!(truncate("short", 38), "short");
+    }
+
+    #[test]
+    fn does_not_panic_on_multibyte_boundaries() {
+        // Each of these panics under byte slicing at index 35.
+        for text in [
+            "Enforce “Two Hats” refactoring — strict cleanup for large repos",
+            "🦀 Rust systems engineer optimized for Tokio and zero-cost abstractions",
+            "ééééééééééééééééééééééééééééééééééééééééééé",
+        ] {
+            let out = truncate(text, 38);
+            assert!(out.chars().count() <= 38, "{} too long", out);
+        }
+    }
+}
