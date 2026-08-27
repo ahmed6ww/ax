@@ -19,14 +19,14 @@ This workflow guides you through releasing a new version of axur to GitHub and m
 Edit `Cargo.toml` and update the version number:
 ```toml
 [package]
-version = "1.5.0"  # Update this
+version = "0.1.0"  # Update this
 ```
 
 ### 2. Commit the version change
 
 ```bash
 git add Cargo.toml Cargo.lock
-git commit -m "chore: bump version to v1.5.0"
+git commit -m "chore: bump version to v0.1.0"
 git push origin main
 ```
 
@@ -34,12 +34,12 @@ git push origin main
 
 // turbo
 ```bash
-git tag v1.5.0
+git tag v0.1.0
 ```
 
 // turbo
 ```bash
-git push origin v1.5.0
+git push origin v0.1.0
 ```
 
 ### 4. Monitor the GitHub Actions workflow
@@ -55,7 +55,7 @@ Check the progress at: https://github.com/agenzalabs/ax/actions
 
 Once the workflow completes:
 - Visit https://github.com/agenzalabs/ax/releases
-- Verify v1.5.0 is published with all binaries
+- Verify v0.1.0 is published with all binaries
 - Test the install script:
 
 ```bash
@@ -67,7 +67,7 @@ curl -fsSL https://raw.githubusercontent.com/agenzalabs/ax/main/install.sh | bas
 Alternatively, use the automated release script:
 
 ```bash
-./scripts/release.sh 1.5.0
+./scripts/release.sh 0.1.0
 ```
 
 This will handle steps 1-3 automatically.
