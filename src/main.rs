@@ -1,35 +1,33 @@
-//! agentpm CLI entry point.
+//! axur CLI entry point.
 
 use clap::Parser;
 
-use agentpm_lib::cli::{Cli, Commands};
-use agentpm_lib::core::error;
-use agentpm_lib::utils::ui;
+use axur_lib::cli::{Cli, Commands};
+use axur_lib::core::error;
+use axur_lib::utils::ui;
 
 #[tokio::main]
 async fn main() -> std::process::ExitCode {
     let cli = Cli::parse();
 
     let result = match cli.command {
-        Commands::Init => agentpm_lib::cli::commands::init::execute().await,
-        Commands::List => agentpm_lib::cli::commands::list::execute().await,
-        Commands::Audit { revoke } => agentpm_lib::cli::commands::audit::execute(revoke).await,
-        Commands::Cache { clear } => agentpm_lib::cli::commands::cache::execute(clear).await,
+        Commands::Init => axur_lib::cli::commands::init::execute().await,
+        Commands::List => axur_lib::cli::commands::list::execute().await,
+        Commands::Audit { revoke } => axur_lib::cli::commands::audit::execute(revoke).await,
+        Commands::Cache { clear } => axur_lib::cli::commands::cache::execute(clear).await,
         Commands::Install {
             source,
             rev,
             name,
             yes,
-        } => agentpm_lib::cli::commands::install::execute(&source, rev, name, yes).await,
+        } => axur_lib::cli::commands::install::execute(&source, rev, name, yes).await,
         Commands::Sync {
             check,
             update,
             yes,
             offline,
-        } => agentpm_lib::cli::commands::sync::execute(check, update, yes, offline).await,
-        Commands::Uninstall { agent } => {
-            agentpm_lib::cli::commands::uninstall::execute(&agent).await
-        }
+        } => axur_lib::cli::commands::sync::execute(check, update, yes, offline).await,
+        Commands::Uninstall { agent } => axur_lib::cli::commands::uninstall::execute(&agent).await,
     };
 
     match result {

@@ -1,4 +1,4 @@
-//! `agentpm init` — detect installed agents and scaffold the project manifest.
+//! `axur init` — detect installed agents and scaffold the project manifest.
 //!
 //! Interactive on a terminal: detected agents are pre-selected, the scope is a
 //! choice, and the manifest is written from what you pick. Piped or in CI it
@@ -30,7 +30,7 @@ fn user_skills_dir(target: Target) -> String {
 }
 
 pub async fn execute() -> Result<()> {
-    ui::intro("agentpm init");
+    ui::intro("axur init");
 
     let detected: Vec<Target> = Target::all().into_iter().filter(|t| detect(*t)).collect();
 
@@ -55,8 +55,8 @@ pub async fn execute() -> Result<()> {
     if detected.is_empty() {
         ui::warning("No supported agent found on this machine");
         ui::note(
-            "agentpm targets Claude Code and Codex",
-            "Install one, then run agentpm init again.\nYou can still create a manifest now and sync later.",
+            "axur targets Claude Code and Codex",
+            "Install one, then run axur init again.\nYou can still create a manifest now and sync later.",
         );
     }
 
@@ -99,7 +99,7 @@ pub async fn execute() -> Result<()> {
 
     // Preserve an existing configuration; re-running init previously reset a
     // customized registry URL back to the default.
-    let config_path = paths::agentpm_config_path()?;
+    let config_path = paths::axur_config_path()?;
     let mut config = Config::load_or_default()?;
     if let Some(first) = chosen.first() {
         config.default_target = first.slug().to_string();
@@ -113,8 +113,8 @@ pub async fn execute() -> Result<()> {
         "Next",
         &format!(
             "1. Add skills under [skills] in {}\n\
-             2. Run agentpm sync to install them\n\
-             3. Commit {} and agentpm.lock so your team resolves the same commits",
+             2. Run axur sync to install them\n\
+             3. Commit {} and axur.lock so your team resolves the same commits",
             MANIFEST_FILE, MANIFEST_FILE
         ),
     );

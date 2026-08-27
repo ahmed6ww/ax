@@ -4,11 +4,12 @@ pub mod commands;
 
 use clap::{Parser, Subcommand};
 
-/// agentpm (Agent Package Manager) - The npm of the Agentic AI era
+/// axur - a package manager for AI coding-agent setups.
 ///
-/// Install AI agent configurations into Claude Code and Codex.
+/// Declare what a project's agent needs in `axur.toml`, pin it in
+/// `axur.lock`, and every machine that syncs gets the same setup.
 #[derive(Parser, Debug)]
-#[command(name = "agentpm")]
+#[command(name = "axur")]
 #[command(author = "ahmed6ww")]
 #[command(version = env!("CARGO_PKG_VERSION"))]
 #[command(about = "Keep your team running the same agent setup on Claude Code and Codex", long_about = None)]
@@ -20,7 +21,7 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Initialize agentpm and detect installed editors
+    /// Initialize axur and detect installed editors
     Init,
 
     /// Show what this project has installed
@@ -35,12 +36,12 @@ pub enum Commands {
 
     /// Show what is authorised to run on this machine
     Audit {
-        /// Withdraw approval for a name, so agentpm asks again
+        /// Withdraw approval for a name, so axur asks again
         #[arg(long, value_name = "NAME")]
         revoke: Option<String>,
     },
 
-    /// Add a skill or bundle to agentpm.toml and sync
+    /// Add a skill or bundle to axur.toml and sync
     Install {
         /// Source as owner/repo, optionally with #path/inside/repo
         source: String,
@@ -58,7 +59,7 @@ pub enum Commands {
         yes: bool,
     },
 
-    /// Install everything agentpm.toml declares, for the whole team
+    /// Install everything axur.toml declares, for the whole team
     Sync {
         /// Verify only: write nothing and exit non-zero if the tree has drifted
         #[arg(long, default_value = "false")]
@@ -77,7 +78,7 @@ pub enum Commands {
         offline: bool,
     },
 
-    /// Remove a skill or bundle from agentpm.toml and sync
+    /// Remove a skill or bundle from axur.toml and sync
     Uninstall {
         /// Name it was installed under
         agent: String,

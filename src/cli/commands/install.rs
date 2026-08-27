@@ -1,7 +1,7 @@
-//! `agentpm install` — add a source to the manifest and sync.
+//! `axur install` — add a source to the manifest and sync.
 //!
 //! Modelled on `npm install <pkg>`: the command records the dependency in
-//! `agentpm.toml` and then reconciles, rather than performing a one-off install
+//! `axur.toml` and then reconciles, rather than performing a one-off install
 //! that nothing remembers. That is what keeps the manifest the single
 //! description of what a project needs.
 
@@ -33,7 +33,7 @@ pub async fn execute(
     name_override: Option<String>,
     assume_yes: bool,
 ) -> Result<()> {
-    ui::intro(&format!("agentpm install {}", spec));
+    ui::intro(&format!("axur install {}", spec));
 
     let (source_str, path) = split_source(spec);
     let source = GitHubSource::parse(source_str)?;

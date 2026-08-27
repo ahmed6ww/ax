@@ -43,14 +43,14 @@ pub fn skill_dir(skills_root: &Path, skill_name: &str) -> Result<PathBuf> {
 
 /// Write `contents` to `path` atomically, replacing it outright.
 ///
-/// For files agentpm owns: skill files it authored and will author again.
+/// For files axur owns: skill files it authored and will author again.
 pub fn write_atomic(path: &Path, contents: &[u8]) -> Result<()> {
     write_inner(path, contents, false)
 }
 
-/// Write atomically, first keeping one `.agentpm-bak` generation.
+/// Write atomically, first keeping one `.axur-bak` generation.
 ///
-/// For files agentpm shares with the user — an editor's MCP configuration —
+/// For files axur shares with the user — an editor's MCP configuration —
 /// where a rewrite is lossy and must stay recoverable.
 pub fn write_atomic_preserving(path: &Path, contents: &[u8]) -> Result<()> {
     write_inner(path, contents, true)
@@ -78,15 +78,15 @@ fn write_inner(path: &Path, contents: &[u8], backup: bool) -> Result<()> {
 
     if backup {
         // Keep one generation of whatever was already here. Only for files
-        // agentpm does not own: rewriting a user's `.mcp.json` or Codex
+        // axur does not own: rewriting a user's `.mcp.json` or Codex
         // `config.toml` through a parser drops comments and reorders keys, so
         // the previous contents have to stay recoverable.
         //
-        // Files agentpm owns outright — everything under a skill directory —
+        // Files axur owns outright — everything under a skill directory —
         // are never backed up. The agents scan those directories, and for a
         // project-scoped install the stray files would be committed.
         if path.exists() {
-            let backup_path = parent.join(format!("{}.agentpm-bak", name));
+            let backup_path = parent.join(format!("{}.axur-bak", name));
             tx::record_write(&backup_path);
             fs::copy(path, &backup_path).with_context(|| {
                 format!("Failed to back up {} before rewriting it", path.display())
@@ -94,7 +94,7 @@ fn write_inner(path: &Path, contents: &[u8], backup: bool) -> Result<()> {
         }
     }
 
-    let tmp = parent.join(format!(".{}.agentpm-tmp", name));
+    let tmp = parent.join(format!(".{}.axur-tmp", name));
 
     {
         let mut file = fs::File::create(&tmp)
@@ -141,14 +141,14 @@ mod tests {
     }
 
     #[test]
-    fn write_atomic_leaves_no_backup_for_files_agentpm_owns() {
+    fn write_atomic_leaves_no_backup_for_files_axur_owns() {
         let dir = tempfile::tempdir().unwrap();
         let target = dir.path().join("SKILL.md");
         write_atomic(&target, b"first").unwrap();
         write_atomic(&target, b"second").unwrap();
 
         // A skill directory is scanned by the agent and committed with the
-        // repo, so a stray .agentpm-bak must never appear in it.
+        // repo, so a stray .axur-bak must never appear in it.
         let names: Vec<String> = fs::read_dir(dir.path())
             .unwrap()
             .filter_map(|e| e.ok())
@@ -165,7 +165,7 @@ mod tests {
         write_atomic_preserving(&target, b"rewritten").unwrap();
 
         assert_eq!(fs::read_to_string(&target).unwrap(), "rewritten");
-        let backup = dir.path().join(".mcp.json.agentpm-bak");
+        let backup = dir.path().join(".mcp.json.axur-bak");
         assert_eq!(fs::read_to_string(&backup).unwrap(), "original");
     }
 
@@ -180,7 +180,7 @@ mod tests {
         let leftovers: Vec<_> = fs::read_dir(target.parent().unwrap())
             .unwrap()
             .filter_map(|e| e.ok())
-            .filter(|e| e.file_name().to_string_lossy().contains("agentpm-tmp"))
+            .filter(|e| e.file_name().to_string_lossy().contains("axur-tmp"))
             .collect();
         assert!(leftovers.is_empty());
     }

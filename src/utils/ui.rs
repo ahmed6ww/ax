@@ -22,14 +22,14 @@ pub enum Mode {
     Plain,
 }
 
-/// `AGENTPM_OUTPUT` forces a mode: `rich`, `plain`, or `auto` (the default).
+/// `AXUR_OUTPUT` forces a mode: `rich`, `plain`, or `auto` (the default).
 ///
 /// Forcing matters in both directions — a CI runner that renders ANSI can ask
 /// for `rich`, and a terminal session piping into a pager can ask for `plain`.
 fn mode() -> Mode {
     static MODE: OnceLock<Mode> = OnceLock::new();
     *MODE.get_or_init(|| {
-        match std::env::var("AGENTPM_OUTPUT")
+        match std::env::var("AXUR_OUTPUT")
             .unwrap_or_default()
             .to_ascii_lowercase()
             .as_str()

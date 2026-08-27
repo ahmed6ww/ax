@@ -6,8 +6,8 @@
 //! hijacked account, or a careless copy-paste becomes execution with no moment
 //! where a person could have said no.
 //!
-//! Approval is recorded per user, at `~/.agentpm/trust.toml`, and deliberately
-//! **not** in `agentpm.lock`. The lockfile is committed: if it carried
+//! Approval is recorded per user, at `~/.axur/trust.toml`, and deliberately
+//! **not** in `axur.lock`. The lockfile is committed: if it carried
 //! approvals, cloning a repository would silently inherit the decisions of
 //! whoever ran sync first, which is the property being defended against.
 //!
@@ -144,7 +144,7 @@ impl TrustStore {
     }
 
     pub fn path() -> Result<PathBuf> {
-        Ok(crate::utils::paths::agentpm_config_dir()?.join(TRUST_FILE))
+        Ok(crate::utils::paths::axur_config_dir()?.join(TRUST_FILE))
     }
 
     pub fn load() -> Result<Self> {
@@ -164,7 +164,7 @@ impl TrustStore {
 
         let store: Self = toml::from_str(&content).with_context(|| {
             format!(
-                "{} is not valid TOML. agentpm will not overwrite it — fix or \
+                "{} is not valid TOML. axur will not overwrite it — fix or \
                  move the file, then retry.",
                 path.display()
             )
@@ -172,7 +172,7 @@ impl TrustStore {
 
         if store.version != TRUST_VERSION {
             anyhow::bail!(
-                "{} was written by a different version of agentpm (version {}, expected {}).",
+                "{} was written by a different version of axur (version {}, expected {}).",
                 path.display(),
                 store.version,
                 TRUST_VERSION
@@ -192,7 +192,7 @@ impl TrustStore {
         sorted.entries.sort_by(|a, b| a.label.cmp(&b.label));
         sorted.entries.dedup_by(|a, b| a.digest == b.digest);
 
-        let header = "# Records what you have allowed agentpm to install that runs code.\n\
+        let header = "# Records what you have allowed axur to install that runs code.\n\
                       # Delete an entry to be asked about it again.\n\n";
         let rendered =
             toml::to_string_pretty(&sorted).context("Failed to serialize the trust store")?;
@@ -252,7 +252,7 @@ mod tests {
             "context7",
             "npx",
             &["-y".to_string(), "@upstash/context7-mcp".to_string()],
-            "agentpm.toml",
+            "axur.toml",
         )
     }
 
@@ -267,7 +267,7 @@ mod tests {
         store.approve(&mcp());
         assert!(store.is_approved(&mcp()));
 
-        let tampered = Request::mcp("context7", "curl", &["evil.sh".to_string()], "agentpm.toml");
+        let tampered = Request::mcp("context7", "curl", &["evil.sh".to_string()], "axur.toml");
         assert!(
             !store.is_approved(&tampered),
             "a different command must not inherit approval"
@@ -282,7 +282,7 @@ mod tests {
             "context7",
             "npx",
             &["-y".to_string(), "@evil/mcp".to_string()],
-            "agentpm.toml",
+            "axur.toml",
         );
         assert!(!store.is_approved(&tampered));
     }

@@ -90,7 +90,7 @@ pub fn review(requests: &[Request], assume_yes: bool) -> Result<Decision> {
     ui::success(&format!(
         "Approved {} item(s) {}",
         pending.len(),
-        ui::dim("· recorded in ~/.agentpm/trust.toml")
+        ui::dim("· recorded in ~/.axur/trust.toml")
     ));
 
     Ok(Decision::Proceed)

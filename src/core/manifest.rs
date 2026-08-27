@@ -1,7 +1,7 @@
-//! `agentpm.toml` — the project manifest.
+//! `axur.toml` — the project manifest.
 //!
 //! Committed to the repository. It states what agent configuration this project
-//! requires; `agentpm.lock` records what that resolved to. Together they are the pair
+//! requires; `axur.lock` records what that resolved to. Together they are the pair
 //! the competing tools omit: an install ledger in `$HOME` says what one machine
 //! happens to have, while a manifest plus lock says what every machine must get.
 
@@ -14,7 +14,7 @@ use crate::core::agent::McpTool;
 use crate::installers::Target;
 use crate::utils::paths::Scope;
 
-pub const MANIFEST_FILE: &str = "agentpm.toml";
+pub const MANIFEST_FILE: &str = "axur.toml";
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -174,7 +174,7 @@ impl McpSpec {
 }
 
 impl Manifest {
-    /// Locate `agentpm.toml` by walking up from `start` to the filesystem root.
+    /// Locate `axur.toml` by walking up from `start` to the filesystem root.
     pub fn find(start: &Path) -> Option<PathBuf> {
         let mut dir = Some(start);
         while let Some(d) = dir {
@@ -198,7 +198,7 @@ impl Manifest {
         crate::installers::common::write_atomic(path, rendered.as_bytes())
     }
 
-    /// A starter manifest for `agentpm init`.
+    /// A starter manifest for `axur init`.
     pub fn starter(detected: &[Target]) -> Self {
         let agents = if detected.is_empty() {
             default_agents()

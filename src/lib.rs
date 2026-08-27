@@ -1,4 +1,4 @@
-//! agentpm (Agent Package Manager) - The npm of the Agentic AI era
+//! axur - a package manager for AI coding-agent setups.
 //!
 //! A CLI tool that installs AI agent configurations into Claude Code and Codex.
 

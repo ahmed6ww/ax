@@ -1,4 +1,4 @@
-//! `agentpm cache` — inspect or clear the content cache.
+//! `axur cache` — inspect or clear the content cache.
 //!
 //! Everything stored is immutable content addressed by commit, so clearing is
 //! always safe: the next sync refetches and repopulates.
@@ -24,12 +24,12 @@ fn human(bytes: u64) -> String {
 }
 
 pub async fn execute(clear: bool) -> Result<()> {
-    ui::intro("agentpm cache");
+    ui::intro("axur cache");
 
     let cache = Cache::open();
 
     if !cache.is_enabled() {
-        ui::warning("Caching is disabled by AGENTPM_NO_CACHE");
+        ui::warning("Caching is disabled by AXUR_NO_CACHE");
         ui::outro("Nothing to report");
         return Ok(());
     }
@@ -54,10 +54,7 @@ pub async fn execute(clear: bool) -> Result<()> {
         ));
     }
 
-    ui::outro(&format!(
-        "Clear with {}",
-        ui::accent("agentpm cache --clear")
-    ));
+    ui::outro(&format!("Clear with {}", ui::accent("axur cache --clear")));
 
     Ok(())
 }

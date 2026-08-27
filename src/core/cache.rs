@@ -27,16 +27,16 @@ pub struct Cache {
 }
 
 impl Cache {
-    /// Open the cache at `~/.agentpm/cache`.
+    /// Open the cache at `~/.axur/cache`.
     ///
-    /// `AGENTPM_NO_CACHE` disables it. A cache that cannot be opened is not an
+    /// `AXUR_NO_CACHE` disables it. A cache that cannot be opened is not an
     /// error: it degrades to fetching, which is what it was doing before.
     pub fn open() -> Self {
-        if std::env::var_os("AGENTPM_NO_CACHE").is_some() {
+        if std::env::var_os("AXUR_NO_CACHE").is_some() {
             return Self { root: None };
         }
 
-        let root = crate::utils::paths::agentpm_config_dir()
+        let root = crate::utils::paths::axur_config_dir()
             .map(|dir| dir.join("cache"))
             .ok();
 

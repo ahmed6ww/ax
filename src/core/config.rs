@@ -9,7 +9,7 @@ use std::path::Path;
 /// APM Configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    /// Default target for installations (claude, cursor)
+    /// Default target for installations (claude-code, codex)
     pub default_target: String,
 
     /// Whether to show verbose output
@@ -42,7 +42,7 @@ impl Config {
 
     /// Load configuration or create default
     pub fn load_or_default() -> Result<Self> {
-        let path = crate::utils::paths::agentpm_config_path()?;
+        let path = crate::utils::paths::axur_config_path()?;
         if path.exists() {
             Self::load(&path)
         } else {

@@ -1,4 +1,4 @@
-//! `agentpm uninstall` — drop an entry from the manifest and reconcile.
+//! `axur uninstall` — drop an entry from the manifest and reconcile.
 //!
 //! The inverse of `install`: the manifest is the record of what a project
 //! needs, so removal edits it and lets `sync` prune the files. That keeps the
@@ -10,7 +10,7 @@ use crate::core::manifest::{Manifest, MANIFEST_FILE};
 use crate::utils::{paths, ui};
 
 pub async fn execute(name: &str) -> Result<()> {
-    ui::intro(&format!("agentpm uninstall {}", name));
+    ui::intro(&format!("axur uninstall {}", name));
 
     let project_root = paths::project_root()?;
     let Some(manifest_path) = Manifest::find(&project_root) else {

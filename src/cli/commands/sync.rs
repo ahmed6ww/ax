@@ -1,4 +1,4 @@
-//! `agentpm sync` — reconcile the working tree with `agentpm.toml`.
+//! `axur sync` — reconcile the working tree with `axur.toml`.
 //!
 //! Three modes, mirroring the distinction between `npm install` and `npm ci`:
 //!
@@ -129,7 +129,7 @@ async fn run(
     let cwd = std::env::current_dir()?;
     let manifest_path = Manifest::find(&cwd).ok_or_else(|| {
         crate::core::error::Error::NotFound(format!(
-            "No {} in this directory or any parent. Run `agentpm init` to create one.",
+            "No {} in this directory or any parent. Run `axur init` to create one.",
             crate::core::manifest::MANIFEST_FILE
         ))
     })?;
@@ -139,11 +139,7 @@ async fn run(
     let (targets, scope) = manifest.targets.resolve()?;
 
     if announce {
-        ui::intro(if check {
-            "agentpm check"
-        } else {
-            "agentpm sync"
-        });
+        ui::intro(if check { "axur check" } else { "axur sync" });
     }
 
     ui::step(&format!(
@@ -231,7 +227,7 @@ async fn run(
         ui::note(
             "Add a skill",
             &format!(
-                "agentpm install vercel-labs/skills#skills/find-skills\n\nor edit {} by hand",
+                "axur install vercel-labs/skills#skills/find-skills\n\nor edit {} by hand",
                 crate::core::manifest::MANIFEST_FILE
             ),
         );
@@ -242,7 +238,7 @@ async fn run(
     if check && existing.is_none() {
         ui::outro_cancel("Nothing to check against");
         anyhow::bail!(
-            "No {} in this project. Run `agentpm sync` and commit the result.",
+            "No {} in this project. Run `axur sync` and commit the result.",
             crate::core::lockfile::LOCKFILE
         );
     }
@@ -517,7 +513,7 @@ async fn run(
                 .join("\n")
         ));
         ui::outro_cancel(&format!(
-            "Out of sync — run `agentpm sync` and commit {}",
+            "Out of sync — run `axur sync` and commit {}",
             crate::core::lockfile::LOCKFILE
         ));
         std::process::exit(DRIFT_EXIT_CODE);
@@ -565,7 +561,7 @@ async fn run(
 
     // ---- prune what the manifest no longer declares -----------------------
     //
-    // A skill removed from agentpm.toml has to leave the disk too, or the
+    // A skill removed from axur.toml has to leave the disk too, or the
     // agent keeps loading something the project dropped.
     let stale: Vec<String> = existing
         .as_ref()
@@ -877,7 +873,7 @@ fn verify_pin(
     anyhow::bail!(
         "'{}' is pinned to {} in {}, but its contents no longer match.\n\
          The source may have been rewritten. Inspect it, then run \
-         `agentpm sync --update` if the change is expected.",
+         `axur sync --update` if the change is expected.",
         plan.name,
         &resolved[..12.min(resolved.len())],
         crate::core::lockfile::LOCKFILE

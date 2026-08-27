@@ -66,20 +66,20 @@ jobs:
       - name: Smoke test the binary (Unix)
         if: runner.os != 'Windows'
         run: |
-          ./target/release/agentpm --version
-          ./target/release/agentpm --help
+          ./target/release/axur --version
+          ./target/release/axur --help
           # A fresh directory has no manifest; the command must say so and fail
           # cleanly rather than panic.
           mkdir -p "$RUNNER_TEMP/empty" && cd "$RUNNER_TEMP/empty"
-          if "$GITHUB_WORKSPACE/target/release/agentpm" sync; then
+          if "$GITHUB_WORKSPACE/target/release/axur" sync; then
             echo "sync should fail without a manifest" && exit 1
           fi
 
       - name: Smoke test the binary (Windows)
         if: runner.os == 'Windows'
         run: |
-          .\target\release\agentpm.exe --version
-          .\target\release\agentpm.exe --help
+          .\target\release\axur.exe --version
+          .\target\release\axur.exe --help
 
   audit:
     name: Dependency audit

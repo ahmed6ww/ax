@@ -41,20 +41,20 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact: agentpm-linux-x64
+            artifact: axur-linux-x64
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            artifact: agentpm-linux-arm64
+            artifact: axur-linux-arm64
             cross: true
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact: agentpm-macos-x64
+            artifact: axur-macos-x64
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact: agentpm-macos-arm64
+            artifact: axur-macos-arm64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact: agentpm-windows-x64.exe
+            artifact: axur-windows-x64.exe
 
     steps:
       - uses: actions/checkout@v4
@@ -89,9 +89,9 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ runner.os }}" = "Windows" ]; then
-            cp "target/${{ matrix.target }}/release/agentpm.exe" "${{ matrix.artifact }}"
+            cp "target/${{ matrix.target }}/release/axur.exe" "${{ matrix.artifact }}"
           else
-            cp "target/${{ matrix.target }}/release/agentpm" "${{ matrix.artifact }}"
+            cp "target/${{ matrix.target }}/release/axur" "${{ matrix.artifact }}"
             chmod +x "${{ matrix.artifact }}"
           fi
 
@@ -145,13 +145,13 @@ jobs:
       - name: Attest provenance
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: artifacts/agentpm-*
+          subject-path: artifacts/axur-*
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/agentpm-*
+            artifacts/axur-*
             artifacts/SHA256SUMS
           generate_release_notes: true
           fail_on_unmatched_files: true

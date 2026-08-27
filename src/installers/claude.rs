@@ -139,7 +139,7 @@ impl Installer for ClaudeInstaller {
             } else {
                 serde_json::from_str(&content).with_context(|| {
                     format!(
-                        "{} is not valid JSON. agentpm will not overwrite it — \
+                        "{} is not valid JSON. axur will not overwrite it — \
                          fix or move the file, then retry.",
                         config_path.display()
                     )
@@ -204,10 +204,10 @@ impl Installer for ClaudeInstaller {
 // ---------------------------------------------------------------------------
 // settings.json merging
 //
-// agentpm shares this file with the user, so a sync must add its own entries,
+// axur shares this file with the user, so a sync must add its own entries,
 // remove the ones a previous sync added, and leave everything else untouched.
 // Tracking the previous contribution in the lockfile — rather than tagging
-// entries in the file — keeps settings.json free of agentpm-specific keys that
+// entries in the file — keeps settings.json free of axur-specific keys that
 // Claude Code would not recognize.
 // ---------------------------------------------------------------------------
 
@@ -225,7 +225,7 @@ fn read_json_object(path: &std::path::Path) -> Result<Value> {
 
     let value: Value = serde_json::from_str(&content).with_context(|| {
         format!(
-            "{} is not valid JSON. agentpm will not overwrite it — fix or move \
+            "{} is not valid JSON. axur will not overwrite it — fix or move \
              the file, then retry.",
             path.display()
         )

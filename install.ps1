@@ -1,4 +1,4 @@
-# agentpm installer for Windows
+# axur installer for Windows
 #   irm https://raw.githubusercontent.com/ahmed6ww/ax/main/install.ps1 | iex
 #
 # The release workflow has always built a Windows binary, but nothing could
@@ -9,8 +9,8 @@
 $ErrorActionPreference = 'Stop'
 
 $Repo  = 'ahmed6ww/ax'
-$Bin   = 'agentpm'
-$Asset = 'agentpm-windows-x64.exe'
+$Bin   = 'axur'
+$Asset = 'axur-windows-x64.exe'
 
 function Write-Step($m) { Write-Host "-> $m" -ForegroundColor Cyan }
 function Write-Ok($m)   { Write-Host "OK $m" -ForegroundColor Green }
@@ -18,24 +18,24 @@ function Write-Dim($m)  { Write-Host "   $m" -ForegroundColor DarkGray }
 function Die($m)        { Write-Host $m -ForegroundColor Red; exit 1 }
 
 if ([Environment]::Is64BitOperatingSystem -eq $false) {
-    Die 'agentpm ships a 64-bit Windows binary only. Build from source: cargo install agentpm'
+    Die 'axur ships a 64-bit Windows binary only. Build from source: cargo install axur'
 }
 
 Write-Step 'Resolving latest release'
 try {
     $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" `
-        -Headers @{ 'User-Agent' = 'agentpm-installer' }
+        -Headers @{ 'User-Agent' = 'axur-installer' }
 } catch {
     Die "Could not reach the GitHub API: $($_.Exception.Message)"
 }
 
-$version = if ($env:AGENTPM_VERSION) { $env:AGENTPM_VERSION } else { $release.tag_name }
-if (-not $version) { Die 'Could not determine the latest release. Set AGENTPM_VERSION to pin a tag.' }
+$version = if ($env:AXUR_VERSION) { $env:AXUR_VERSION } else { $release.tag_name }
+if (-not $version) { Die 'Could not determine the latest release. Set AXUR_VERSION to pin a tag.' }
 
 Write-Step "Installing $Bin $version"
 
 $base = "https://github.com/$Repo/releases/download/$version"
-$tmp  = Join-Path $env:TEMP ("agentpm-" + [guid]::NewGuid().ToString('N'))
+$tmp  = Join-Path $env:TEMP ("axur-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $tmp | Out-Null
 
 try {
@@ -71,7 +71,7 @@ try {
     Write-Dim $actual
 
     # Per-user by default: no elevation, and nothing outside the user's profile.
-    $dest = Join-Path $env:LOCALAPPDATA 'agentpm\bin'
+    $dest = Join-Path $env:LOCALAPPDATA 'axur\bin'
     New-Item -ItemType Directory -Path $dest -Force | Out-Null
     $target = Join-Path $dest "$Bin.exe"
 
@@ -88,10 +88,10 @@ try {
 }
 
 Write-Host ''
-Write-Ok "agentpm $version installed"
+Write-Ok "axur $version installed"
 Write-Host ''
-Write-Host '  agentpm init                                    set up this project'
-Write-Host '  agentpm install vercel-labs/skills#skills/find-skills'
-Write-Host '  agentpm sync                                    install what the manifest declares'
+Write-Host '  axur init                                    set up this project'
+Write-Host '  axur install vercel-labs/skills#skills/find-skills'
+Write-Host '  axur sync                                    install what the manifest declares'
 Write-Host ''
-Write-Dim 'Verify what it authorised to run:  agentpm audit'
+Write-Dim 'Verify what it authorised to run:  axur audit'

@@ -9,7 +9,7 @@
 use std::fs;
 use std::path::Path;
 
-use agentpm_lib::core::trust::{Grant, Request, TrustStore};
+use axur_lib::core::trust::{Grant, Request, TrustStore};
 
 fn in_temp_home<F: FnOnce(&Path)>(f: F) {
     use std::sync::Mutex;
@@ -17,14 +17,14 @@ fn in_temp_home<F: FnOnce(&Path)>(f: F) {
     let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
     let home = tempfile::tempdir().unwrap();
-    let prev = std::env::var_os("AGENTPM_HOME");
-    std::env::set_var("AGENTPM_HOME", home.path());
+    let prev = std::env::var_os("AXUR_HOME");
+    std::env::set_var("AXUR_HOME", home.path());
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(home.path())));
 
     match prev {
-        Some(v) => std::env::set_var("AGENTPM_HOME", v),
-        None => std::env::remove_var("AGENTPM_HOME"),
+        Some(v) => std::env::set_var("AXUR_HOME", v),
+        None => std::env::remove_var("AXUR_HOME"),
     }
     if let Err(payload) = result {
         std::panic::resume_unwind(payload);
@@ -36,7 +36,7 @@ fn context7() -> Request {
         "context7",
         "npx",
         &["-y".to_string(), "@upstash/context7-mcp".to_string()],
-        "agentpm.toml",
+        "axur.toml",
     )
 }
 
@@ -50,7 +50,7 @@ fn approval_persists_to_the_user_store_and_not_the_project() {
         store.save().unwrap();
 
         // Written under the user's config directory, never beside the project.
-        let path = home.join(".agentpm/trust.toml");
+        let path = home.join(".axur/trust.toml");
         assert!(path.is_file(), "missing {}", path.display());
 
         let reloaded = TrustStore::load().unwrap();
@@ -96,7 +96,7 @@ fn swapping_the_command_is_a_new_decision() {
                 "|".to_string(),
                 "sh".to_string(),
             ],
-            "agentpm.toml",
+            "axur.toml",
         );
 
         let store = TrustStore::load().unwrap();
@@ -141,8 +141,8 @@ fn rotating_an_api_key_does_not_re_prompt() {
     // Env values are excluded from the digest on purpose: a rotated key is not
     // a change to what runs, and re-prompting for it would train people to
     // approve without reading.
-    let a = Request::mcp("context7", "npx", &["-y".to_string()], "agentpm.toml");
-    let b = Request::mcp("context7", "npx", &["-y".to_string()], "agentpm.toml");
+    let a = Request::mcp("context7", "npx", &["-y".to_string()], "axur.toml");
+    let b = Request::mcp("context7", "npx", &["-y".to_string()], "axur.toml");
     assert_eq!(a.digest, b.digest);
 }
 
@@ -176,7 +176,7 @@ fn revoking_makes_the_gate_ask_again() {
 #[test]
 fn a_corrupt_store_never_silently_grants_or_discards() {
     in_temp_home(|home| {
-        let dir = home.join(".agentpm");
+        let dir = home.join(".axur");
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("trust.toml");
         fs::write(&path, "not valid toml {{{").unwrap();

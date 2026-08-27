@@ -40,17 +40,17 @@ impl Scope {
 /// Directory name reserved by Claude Code for skills synced from claude.ai.
 ///
 /// Claude Code overwrites this directory on sync and skips any skill authored
-/// there, so agentpm must never install into it.
+/// there, so axur must never install into it.
 pub const CLAUDE_RESERVED_SKILL_DIR: &str = "synced";
 
 /// The home directory every agent path is resolved against.
 ///
-/// `AGENTPM_HOME` overrides it. This exists because `dirs::home_dir()` on Windows
+/// `AXUR_HOME` overrides it. This exists because `dirs::home_dir()` on Windows
 /// reads the profile through the shell API and ignores `HOME`/`USERPROFILE`,
 /// which means tests cannot redirect it — without this override an integration
 /// test writes into the developer's real configuration.
 fn home() -> Result<PathBuf> {
-    if let Some(dir) = std::env::var_os("AGENTPM_HOME") {
+    if let Some(dir) = std::env::var_os("AXUR_HOME") {
         if !dir.is_empty() {
             return Ok(PathBuf::from(dir));
         }
@@ -187,17 +187,17 @@ pub fn codex_detected() -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// agentpm itself
+// axur itself
 // ---------------------------------------------------------------------------
 
-/// The agentpm configuration directory (`~/.agentpm`).
-pub fn agentpm_config_dir() -> Result<PathBuf> {
-    Ok(home()?.join(".agentpm"))
+/// The axur configuration directory (`~/.axur`).
+pub fn axur_config_dir() -> Result<PathBuf> {
+    Ok(home()?.join(".axur"))
 }
 
-/// The agentpm configuration file (`~/.agentpm/config.toml`).
-pub fn agentpm_config_path() -> Result<PathBuf> {
-    Ok(agentpm_config_dir()?.join("config.toml"))
+/// The axur configuration file (`~/.axur/config.toml`).
+pub fn axur_config_path() -> Result<PathBuf> {
+    Ok(axur_config_dir()?.join("config.toml"))
 }
 
 /// Rejects a skill directory name that Claude Code reserves for its own use.

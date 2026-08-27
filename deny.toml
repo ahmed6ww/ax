@@ -1,6 +1,6 @@
 # cargo-deny configuration, enforced by CI.
 #
-# The point is not ceremony: agentpm downloads and installs content that other
+# The point is not ceremony: axur downloads and installs content that other
 # people execute, so an unmaintained or ambiguously licensed dependency in that
 # path is a real liability.
 
@@ -14,7 +14,7 @@ ignore = []
 
 [licenses]
 version = 2
-# Permissive licences only. agentpm ships as a single binary that people are
+# Permissive licences only. axur ships as a single binary that people are
 # expected to redistribute freely.
 allow = [
     "MIT",

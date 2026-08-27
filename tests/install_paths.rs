@@ -1,4 +1,4 @@
-//! Asserts that agentpm writes where Claude Code and Codex actually read.
+//! Asserts that axur writes where Claude Code and Codex actually read.
 //!
 //! These tests exist because the paths were wrong in every release up to 1.5.0:
 //! Claude Code skills went to the Claude Desktop directory on macOS and
@@ -13,9 +13,9 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use agentpm_lib::core::agent::McpTool;
-use agentpm_lib::installers::{get_installer, Target};
-use agentpm_lib::utils::paths::Scope;
+use axur_lib::core::agent::McpTool;
+use axur_lib::installers::{get_installer, Target};
+use axur_lib::utils::paths::Scope;
 
 /// Run `f` with the home directory and working directory pointed at a sandbox.
 ///
@@ -30,13 +30,13 @@ fn in_temp_project<F: FnOnce(&Path, &Path)>(f: F) {
     fs::create_dir_all(project.join(".git")).unwrap();
 
     let prev_cwd = std::env::current_dir().unwrap();
-    let prev_home = std::env::var_os("AGENTPM_HOME");
+    let prev_home = std::env::var_os("AXUR_HOME");
     let prev_claude_dir = std::env::var_os("CLAUDE_CONFIG_DIR");
 
-    // AGENTPM_HOME, not HOME: dirs::home_dir() ignores HOME on Windows, and an
+    // AXUR_HOME, not HOME: dirs::home_dir() ignores HOME on Windows, and an
     // earlier version of this harness wrote into the real ~/.claude and
     // ~/.codex as a result.
-    std::env::set_var("AGENTPM_HOME", home.path());
+    std::env::set_var("AXUR_HOME", home.path());
     std::env::remove_var("CLAUDE_CONFIG_DIR");
     std::env::set_current_dir(&project).unwrap();
 
@@ -45,8 +45,8 @@ fn in_temp_project<F: FnOnce(&Path, &Path)>(f: F) {
 
     std::env::set_current_dir(prev_cwd).ok();
     match prev_home {
-        Some(v) => std::env::set_var("AGENTPM_HOME", v),
-        None => std::env::remove_var("AGENTPM_HOME"),
+        Some(v) => std::env::set_var("AXUR_HOME", v),
+        None => std::env::remove_var("AXUR_HOME"),
     }
     if let Some(v) = prev_claude_dir {
         std::env::set_var("CLAUDE_CONFIG_DIR", v);
@@ -283,7 +283,7 @@ fn a_failure_on_the_second_target_undoes_the_first() {
         let claude = get_installer(Target::Claude, Scope::Project);
         let codex = get_installer(Target::Codex, Scope::Project);
 
-        let journal = agentpm_lib::core::tx::begin();
+        let journal = axur_lib::core::tx::begin();
         let outcome = (|| -> anyhow::Result<()> {
             claude.install_files("tokio-patterns", &skill_files())?;
             claude.install_mcp(&[context7()])?;
@@ -305,7 +305,7 @@ fn a_failure_on_the_second_target_undoes_the_first() {
         );
         assert!(
             !home.join("work/repo/.claude").exists() || !project.join(".claude").exists(),
-            "no directory agentpm created should survive the rollback"
+            "no directory axur created should survive the rollback"
         );
     });
 }
@@ -328,7 +328,7 @@ fn a_rolled_back_run_restores_what_it_overwrote_and_what_it_pruned() {
         .unwrap();
 
         // A later run that overwrites one skill, prunes another, and then fails.
-        let journal = agentpm_lib::core::tx::begin();
+        let journal = axur_lib::core::tx::begin();
         let outcome = (|| -> anyhow::Result<()> {
             claude.install_files("keep-me", &[("SKILL.md".to_string(), b"new body".to_vec())])?;
             assert!(claude.remove_skill("drop-me")?);
@@ -356,7 +356,7 @@ fn a_rolled_back_run_restores_what_it_overwrote_and_what_it_pruned() {
         let strays: Vec<_> = fs::read_dir(project.join(".claude/skills"))
             .unwrap()
             .filter_map(|e| e.ok())
-            .filter(|e| e.file_name().to_string_lossy().contains("agentpm-trash"))
+            .filter(|e| e.file_name().to_string_lossy().contains("axur-trash"))
             .collect();
         assert!(
             strays.is_empty(),
@@ -373,7 +373,7 @@ fn a_committed_run_keeps_everything_it_wrote() {
             .install_files("drop-me", &[("SKILL.md".to_string(), b"old".to_vec())])
             .unwrap();
 
-        let journal = agentpm_lib::core::tx::begin();
+        let journal = axur_lib::core::tx::begin();
         claude
             .install_files("tokio-patterns", &skill_files())
             .unwrap();
@@ -387,7 +387,7 @@ fn a_committed_run_keeps_everything_it_wrote() {
         let strays: Vec<_> = fs::read_dir(project.join(".claude/skills"))
             .unwrap()
             .filter_map(|e| e.ok())
-            .filter(|e| e.file_name().to_string_lossy().contains("agentpm-trash"))
+            .filter(|e| e.file_name().to_string_lossy().contains("axur-trash"))
             .collect();
         assert!(
             strays.is_empty(),

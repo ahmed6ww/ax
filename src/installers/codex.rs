@@ -74,7 +74,7 @@ impl Installer for CodexInstaller {
             } else {
                 content.parse().with_context(|| {
                     format!(
-                        "{} is not valid TOML. agentpm will not overwrite it — \
+                        "{} is not valid TOML. axur will not overwrite it — \
                          fix or move the file, then retry.",
                         config_path.display()
                     )

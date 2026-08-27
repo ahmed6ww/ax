@@ -1,5 +1,5 @@
 #!/bin/bash
-# agentpm Release Script
+# axur Release Script
 # Usage: ./scripts/release.sh <version>
 # Example: ./scripts/release.sh 1.5.0
 
@@ -25,7 +25,7 @@ TAG="v$VERSION"
 
 echo -e "${CYAN}"
 echo "╔═══════════════════════════════════════╗"
-echo "║     agentpm Release Automation             ║"
+echo "║     axur Release Automation             ║"
 echo "╚═══════════════════════════════════════╝"
 echo -e "${NC}"
 

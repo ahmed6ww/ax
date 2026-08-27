@@ -1,7 +1,7 @@
 //! Shared configuration types.
 //!
 //! What remains after the agent.yaml format was retired in favour of
-//! `agentpm.toml` plus `BUNDLE.toml`. An "agent" in the old sense — an identity
+//! `axur.toml` plus `BUNDLE.toml`. An "agent" in the old sense — an identity
 //! with skills and servers — is now expressed as a bundle.
 
 use serde::{Deserialize, Serialize};

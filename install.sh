@@ -1,5 +1,5 @@
 #!/bin/sh
-# agentpm installer
+# axur installer
 #   curl -fsSL https://raw.githubusercontent.com/ahmed6ww/ax/main/install.sh | sh
 #
 # Downloads the release binary for this platform and verifies it against the
@@ -10,7 +10,7 @@
 set -eu
 
 REPO="ahmed6ww/ax"
-BIN="agentpm"
+BIN="axur"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; DIM='\033[2m'; NC='\033[0m'
 
@@ -29,13 +29,13 @@ OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
 
 case "$OS-$ARCH" in
-  linux-x86_64)           ASSET="agentpm-linux-x64" ;;
-  linux-aarch64|linux-arm64) ASSET="agentpm-linux-arm64" ;;
-  darwin-x86_64)          ASSET="agentpm-macos-x64" ;;
-  darwin-arm64)           ASSET="agentpm-macos-arm64" ;;
+  linux-x86_64)           ASSET="axur-linux-x64" ;;
+  linux-aarch64|linux-arm64) ASSET="axur-linux-arm64" ;;
+  darwin-x86_64)          ASSET="axur-macos-x64" ;;
+  darwin-arm64)           ASSET="axur-macos-arm64" ;;
   *)
     printf '%sUnsupported platform: %s-%s%s\n' "$RED" "$OS" "$ARCH" "$NC" >&2
-    echo "On Windows, use install.ps1. Otherwise: cargo install agentpm" >&2
+    echo "On Windows, use install.ps1. Otherwise: cargo install axur" >&2
     exit 1
     ;;
 esac
@@ -49,8 +49,8 @@ say "→ Resolving latest release"
 VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
   | grep '"tag_name"' | head -1 | sed -E 's/.*"([^"]+)".*/\1/') || true
 
-[ -n "${VERSION:-}" ] || die "Could not determine the latest release. Set AGENTPM_VERSION to install a specific tag."
-VERSION="${AGENTPM_VERSION:-$VERSION}"
+[ -n "${VERSION:-}" ] || die "Could not determine the latest release. Set AXUR_VERSION to install a specific tag."
+VERSION="${AXUR_VERSION:-$VERSION}"
 
 say "→ Installing $BIN $VERSION"
 
@@ -105,10 +105,10 @@ case ":$PATH:" in
 esac
 
 echo
-ok "agentpm $VERSION installed"
+ok "axur $VERSION installed"
 echo
-echo "  agentpm init                                    set up this project"
-echo "  agentpm install vercel-labs/skills#skills/find-skills"
-echo "  agentpm sync                                    install what the manifest declares"
+echo "  axur init                                    set up this project"
+echo "  axur install vercel-labs/skills#skills/find-skills"
+echo "  axur sync                                    install what the manifest declares"
 echo
-dim "Verify what it authorised to run:  agentpm audit"
+dim "Verify what it authorised to run:  axur audit"

@@ -1,7 +1,7 @@
 //! Bundle installation across both targets.
 //!
 //! The settings merge is the risky part: `settings.json` is shared with the
-//! user, so agentpm must add its own entries, remove the ones a previous sync
+//! user, so axur must add its own entries, remove the ones a previous sync
 //! added, and never touch anything else. These tests pin that behaviour.
 //!
 //! Schemas are transcribed from vendor documentation:
@@ -12,9 +12,9 @@
 use std::fs;
 use std::path::Path;
 
-use agentpm_lib::core::bundle::{BundleManifest, Hook, Permissions};
-use agentpm_lib::installers::{get_installer, SettingsContribution, Target};
-use agentpm_lib::utils::paths::Scope;
+use axur_lib::core::bundle::{BundleManifest, Hook, Permissions};
+use axur_lib::installers::{get_installer, SettingsContribution, Target};
+use axur_lib::utils::paths::Scope;
 
 fn in_temp_project<F: FnOnce(&Path, &Path)>(f: F) {
     use std::sync::Mutex;
@@ -26,10 +26,10 @@ fn in_temp_project<F: FnOnce(&Path, &Path)>(f: F) {
     fs::create_dir_all(project.join(".git")).unwrap();
 
     let prev_cwd = std::env::current_dir().unwrap();
-    let prev_home = std::env::var_os("AGENTPM_HOME");
+    let prev_home = std::env::var_os("AXUR_HOME");
     let prev_claude = std::env::var_os("CLAUDE_CONFIG_DIR");
 
-    std::env::set_var("AGENTPM_HOME", home.path());
+    std::env::set_var("AXUR_HOME", home.path());
     std::env::remove_var("CLAUDE_CONFIG_DIR");
     std::env::set_current_dir(&project).unwrap();
 
@@ -38,8 +38,8 @@ fn in_temp_project<F: FnOnce(&Path, &Path)>(f: F) {
 
     std::env::set_current_dir(prev_cwd).ok();
     match prev_home {
-        Some(v) => std::env::set_var("AGENTPM_HOME", v),
-        None => std::env::remove_var("AGENTPM_HOME"),
+        Some(v) => std::env::set_var("AXUR_HOME", v),
+        None => std::env::remove_var("AXUR_HOME"),
     }
     if let Some(v) = prev_claude {
         std::env::set_var("CLAUDE_CONFIG_DIR", v);

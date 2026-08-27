@@ -1,6 +1,6 @@
 //! Undo journal for a multi-target install.
 //!
-//! `agentpm sync` writes to every configured target in turn, and until now a
+//! `axur sync` writes to every configured target in turn, and until now a
 //! failure partway through left the run split in half: Claude Code fully
 //! written, Codex untouched, and no lockfile — because the lock is only saved
 //! once every target succeeds. The next run then had no record of what was on
@@ -8,7 +8,7 @@
 //!
 //! This records each mutation before it happens and can put the tree back. It
 //! is deliberately not a general transaction system: it covers the writes
-//! agentpm itself performs during one install, on one thread, and nothing else.
+//! axur itself performs during one install, on one thread, and nothing else.
 //! Concurrent modification by another process is out of scope — the window is
 //! milliseconds and the alternative is a lock file nobody would clean up.
 //!
@@ -27,7 +27,7 @@ thread_local! {
 }
 
 /// Suffix for a directory moved aside rather than deleted outright.
-const TRASH_SUFFIX: &str = ".agentpm-trash";
+const TRASH_SUFFIX: &str = ".axur-trash";
 
 #[derive(Debug)]
 enum Entry {
@@ -56,7 +56,7 @@ pub struct Guard {
 
 /// Begin recording.
 ///
-/// Nesting is a programming error - agentpm opens exactly one journal per run.
+/// Nesting is a programming error - axur opens exactly one journal per run.
 /// Rather than clobber the outer journal and lose its undo information, an
 /// inner scope becomes a no-op and the outer one stays in charge.
 pub fn begin() -> Guard {
@@ -174,7 +174,7 @@ pub fn record_write(path: &Path) {
     match fs::read(path) {
         Ok(previous) => push(Entry::Replaced(path.to_path_buf(), previous)),
         // Unreadable is treated as absent: the undo then deletes it, which is
-        // the right outcome for a path agentpm is about to create.
+        // the right outcome for a path axur is about to create.
         Err(_) => push(Entry::Created(path.to_path_buf())),
     }
 }
@@ -379,7 +379,7 @@ mod tests {
         let leftovers: Vec<_> = fs::read_dir(dir.path())
             .unwrap()
             .filter_map(|e| e.ok())
-            .filter(|e| e.file_name().to_string_lossy().contains("agentpm-trash"))
+            .filter(|e| e.file_name().to_string_lossy().contains("axur-trash"))
             .collect();
         assert!(leftovers.is_empty(), "commit must clear the holding dir");
     }

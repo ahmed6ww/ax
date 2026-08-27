@@ -1,170 +1,193 @@
-# agentpm (Agent Package Manager)
+# axur
 
-> **The npm of the Agentic AI era.**
->
-> "Write Once, Run on Claude, Cursor, or Codex."
+> **skills.sh helps you find a skill. axur makes sure your whole team is running the same ones.**
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+A package manager for AI coding-agent setups, targeting **Claude Code** and **Codex**.
+
+Declare what your project's agent needs in `axur.toml`, commit it alongside `axur.lock`, and every teammate — and CI — gets a byte-identical setup from one command.
+
+```bash
+axur sync
+```
+
+[![CI](https://github.com/ahmed6ww/ax/actions/workflows/ci.yml/badge.svg)](https://github.com/ahmed6ww/ax/actions/workflows/ci.yml)
 ![Rust](https://img.shields.io/badge/rust-stable-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-## 🚀 What is AX?
+---
 
-agentpm is a Rust-based CLI tool that solves **Configuration Fatigue** in AI-assisted development. Instead of manually configuring System Prompts, MCP Servers, and Documentation files for every new project, developers simply run:
+## The problem
 
-```bash
-agentpm install code-cleaner
+Claude Code and Codex can be taught things: written instructions (skills), tools they can call (MCP servers), specialist subagents, slash commands, hooks that fire automatically, and permission rules.
+
+Today everyone configures that by hand, per machine. Five developers on one team end up with five subtly different assistants, nobody can say what anyone has installed, and onboarding a new hire means reciting folklore.
+
+## What axur does
+
+```toml
+# axur.toml — commit this
+[targets]
+agents = ["claude-code", "codex"]
+scope  = "project"
+
+[skills]
+find-skills = { source = "vercel-labs/skills", path = "skills/find-skills" }
+
+[mcp.context7]
+command = "npx"
+args    = ["-y", "@upstash/context7-mcp"]
 ```
 
-agentpm acts as a **Transpiler**: It reads a universal **Agent Skill Standard** definition and compiles it into the native format of your environment—whether that's Claude Code or Cursor.
+```console
+$ axur sync
+== axur sync
+- axur.toml
+   Claude Code, Codex  ·  project scope
+- Resolved 1 source
+   ✓ find-skills                435076e  1 file
++ Claude Code   .claude/skills
+   ✓ 1 skill
+   ✓ 1 MCP server
++ Codex   .agents/skills
+   ✓ 1 skill
+   ✓ 1 MCP server
+== In sync · axur.lock updated — commit it
+```
 
-## ✨ Features
+Both targets are written to the locations their vendors actually document — `.claude/skills/` and `.agents/skills/`, not the lookalike directories that quietly never get loaded.
 
-- 🔄 **Universal Standard**: Directory-based "Skill" format for rich agent definitions
-- 🦀 **Rust-Powered**: Single binary, blazing fast
-- 🎯 **Multi-Target**: Install to Claude Code or Cursor
-- 🛠️ **MCP Support**: Automatic tool configuration
-- 📚 **Knowledge Graph**: Static reference files and deterministic scripts
-- 🎨 **Beautiful CLI**: Progress bars and colored output
+## Three things that make it more than a copier
 
-## 📦 Installation
+### It pins exactly what you got
 
-### Pre-built Binary
+`axur.lock` records the resolved commit SHA and a digest of every file, so a teammate syncing next week gets what you got, not whatever the source has drifted to. Updating a pin is an explicit `axur sync --update`.
+
+### It asks before anything runs on your machine
+
+MCP servers are programs, and hooks are scripts that fire on their own. axur shows the actual command and waits:
+
+```console
+! 1 MCP server — each runs on your machine every time the agent starts
+   ✗ context7
+      npx -y @upstash/context7-mcp
+      from axur.toml
+
+  Allow these to run on your machine? [y/N]
+```
+
+A run that is not an interactive terminal never approves by default — it exits `7` and tells you to review and re-run with `--yes`.
+
+Approve once and it stays quiet — but if that command ever *changes*, it asks again, so nobody can quietly swap what executes. Approvals live in `~/.axur/trust.toml` on your machine, never in the repo, so cloning a project inherits no one else's decisions. `axur audit` lists what is currently authorised; `axur audit --revoke <name>` withdraws it.
+
+### It can fail a pull request
+
+```yaml
+- run: axur sync --check    # exit 2 if the tree has drifted
+```
+
+Drift stops being a suggestion.
+
+## Bundles
+
+A bundle ships a whole working environment as one pinned unit — skills, subagents, slash commands, MCP servers, hooks, and permission rules:
+
+```toml
+[bundles]
+backend = { source = "acme/agent-bundles", path = "bundles/backend" }
+```
+
+Anything a target cannot accept is **named, never silently dropped**. Codex has no hooks or slash commands, so a sync says so rather than reporting a success that did not happen:
+
+```
++ Codex   .agents/skills
+   ✓ 3 skills
+   ·  skipped, unsupported: 2 commands, 1 hook
+```
+
+## Installation
 
 ```bash
+# macOS / Linux
 curl -fsSL https://raw.githubusercontent.com/ahmed6ww/ax/main/install.sh | sh
+
+# Windows
+irm https://raw.githubusercontent.com/ahmed6ww/ax/main/install.ps1 | iex
+
+# From source
+cargo install axur
 ```
 
-### From Source
+Both installers verify the download against the published `SHA256SUMS` and refuse to install on a mismatch. Releases carry build provenance attestation.
 
-```bash
-git clone https://github.com/ahmed6ww/ax
-cd ax
-cargo build --release
-sudo cp target/release/agentpm /usr/local/bin/
-```
+## Commands
 
-## 🎮 Quick Start
+| Command | What it does |
+| --- | --- |
+| `axur init` | Create `axur.toml`, detecting which agents you have |
+| `axur install <owner/repo#path>` | Add a skill or bundle and sync |
+| `axur sync` | Install everything the manifest declares, from the lock |
+| `axur sync --check` | Verify only; exit 2 on drift. The CI gate |
+| `axur sync --update` | Re-resolve every source and move the pins |
+| `axur sync --offline` | Use only cached content; never touch the network |
+| `axur uninstall <name>` | Remove an entry and sync |
+| `axur list` | Show what this project has installed |
+| `axur audit` | Show what is authorised to run on this machine |
+| `axur cache` | Inspect or clear the content cache |
 
-### 1. Initialize AX
+### Exit codes
 
-```bash
-agentpm init
-```
+Scriptable, and stable across releases:
 
-This detects your installed editors and creates `~/.agentpm/config.toml`.
+| | | | |
+| --- | --- | --- | --- |
+| `0` ok | `1` failure | `2` drift | `3` not found |
+| `4` network | `5` integrity | `6` invalid | `7` denied |
 
-### 2. Browse Available Agents
+## How it compares
 
-```bash
-agentpm list
-```
+Vercel's [skills.sh](https://skills.sh) supports 76 agents. axur supports two — and that is the whole bet.
 
-Output:
-```
-  ▶ Available Agents
+Supporting 76 tools means you can only install what all 76 understand: a text file. You cannot install an MCP server, a hook, or a permission rule, because most of them have no such concept. skills.sh also has no version pinning — its lockfile lives in `$HOME` and records what you happen to have, not what the project requires, so two people cannot reliably get the same thing.
 
-  NAME                         VERSION    DESCRIPTION
-  ──────────────────────────────────────────────────────────────────────────────────────
-  code-cleaner                 1.0.0      Enforce "Two Hats" refactoring & strict cleanup
-  enterprise-code-architect    2.0.0      Scalable patterns (Hexagonal, Monorepo decisions)
-  fastapi-code-cleaner         1.0.0      Pydantic V2 migration & dead code elimination
-  fastapi-code-structure       2.0.0      Enterprise dispatch-style project layout
-  fastapi-tdd                  1.0.0      "The Quads" testing strategy for Async Python
-  nextjs-code-structure        1.0.0      Feature-sliced design for Scalable Next.js
-  
-  → 6 agent(s) available
-  → Install with: agentpm install <agent-name>
-```
+|  | skills.sh | axur |
+| --- | --- | --- |
+| Agents supported | 76 | 2 |
+| Skills | ✓ | ✓ |
+| Version pinning | — | ✓ commit SHA + file digests |
+| Project manifest, committed | — | ✓ |
+| CI drift gate | — | ✓ |
+| MCP servers | — | ✓ |
+| Subagents, commands, hooks, permissions | — | ✓ |
+| Consent before code runs | — | ✓ |
 
-### 3. Install an Agent
+## Where files land
 
-```bash
-# Install to Claude Code (default)
-agentpm install code-cleaner
+| | Claude Code | Codex |
+| --- | --- | --- |
+| Skills (project) | `.claude/skills/<name>/` | `.agents/skills/<name>/` |
+| Skills (user) | `~/.claude/skills/<name>/` | `~/.agents/skills/<name>/` |
+| Subagents | `.claude/agents/<name>.md` | *unsupported* |
+| Commands | `.claude/commands/<name>.md` | *unsupported* |
+| MCP | `.mcp.json` / `~/.claude.json` | `~/.codex/config.toml` |
+| Hooks, permissions | `.claude/settings.json` | *unsupported* |
 
-# Install to Cursor
-agentpm install code-cleaner --target cursor
+`CLAUDE_CONFIG_DIR` is honoured. Shared config files axur did not author keep one `.axur-bak` generation before any rewrite.
 
-# Install globally
-agentpm install code-cleaner --global
-```
+## Environment
 
-## 📐 The Agent Skill Standard
+| Variable | Effect |
+| --- | --- |
+| `GITHUB_TOKEN` | Raises the GitHub API rate limit. Recommended |
+| `AXUR_HOME` | Override the home directory used for `~/.axur`, `~/.claude`, `~/.agents` |
+| `AXUR_OUTPUT` | `rich`, `plain`, or `auto` |
+| `AXUR_NO_CACHE` | Disable the content cache |
 
-Agents are no longer single files. They are full directories following the **Skill Standard**:
+## Status
 
-```
-my-agent/
-├── SKILL.md          # The Source of Truth (Metadata + Prompt)
-├── scripts/          # Python/Bash scripts for deterministic actions
-└── references/       # Static knowledge files (MD) for the agent to read
-```
+Working and tested — 104 tests, exercised end to end against real GitHub repositories.
 
-### Example: `SKILL.md`
+Being straight about the gaps: it has been run in anger only on Windows so far (CI covers Windows, macOS and Linux, but has not yet had a green run), it is not published to crates.io or npm, and no team other than its author has used it. That last one, not the next feature, is the milestone that matters.
 
-```markdown
----
-name: code-cleaner
-description: Refactor code to enforce SOLID principles.
-version: 1.0.0
-allowed-tools: "Read,Write,Bash"
----
-
-# Code Cleaner Identity
-
-You are a Principal Software Engineer acting as the "Code Janitor."
-You must strictly adhere to the "Two Hats" metaphor.
-
-## Execution Workflow
-
-1. Run Auto-Linter: `python {baseDir}/scripts/run_ruff.py`
-2. Tree Shake: `Read({baseDir}/references/cleanup_rules.md)`
-```
-
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                          agentpm                             │
-├─────────────────────────────────────────────────────────┤
-│  ┌─────────┐    ┌─────────────┐    ┌─────────────────┐ │
-│  │  init   │    │    list     │    │     install     │ │
-│  └────┬────┘    └──────┬──────┘    └────────┬────────┘ │
-│       │                │                    │          │
-│       v                v                    v          │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │                   Registry                      │   │
-│  │            (GitHub Raw Content)                 │   │
-│  └─────────────────────────────────────────────────┘   │
-│                          │                             │
-│                          v                             │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │              Installer Trait                    │   │
-│  ├─────────────────────┬───────────────────────────┤   │
-│  │   ClaudeInstaller   │     CursorInstaller      │   │
-│  │   ~/.claude/*       │     .cursor/rules/*       │   │
-│  └─────────────────────┴───────────────────────────┘   │
-150: └─────────────────────────────────────────────────────────┘
-```
-
-## 🛣️ Roadmap
-
-- [x] Core CLI (init, list, install)
-- [x] Claude Code support
-- [x] Cursor support
-- [x] **Agent Skill Standard (v2)**
-- [ ] VS Code extension
-- [ ] Private registries
-- [ ] `agentpm create` template generator
-- [ ] `agentpm publish` for community agents
-
-## 📄 License
+## License
 
 MIT © [Ahmed](https://github.com/ahmed6ww)
-
----
-
-<p align="center">
-  <strong>Built with 🦀 Rust for the Agentic AI era</strong>
-</p>

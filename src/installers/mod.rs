@@ -1,6 +1,6 @@
 //! Installer Module
 //!
-//! Adapter per target editor. agentpm targets Claude Code and Codex only: both speak
+//! Adapter per target editor. axur targets Claude Code and Codex only: both speak
 //! the Agent Skills standard, which lets them share one skill renderer and
 //! differ only in where files land and which surfaces they support.
 
@@ -17,7 +17,7 @@ pub use codex::CodexInstaller;
 use crate::core::bundle::{Hook, Permissions};
 use crate::utils::paths::Scope;
 
-/// What agentpm has written into a target's settings file.
+/// What axur has written into a target's settings file.
 ///
 /// Recorded in the lockfile so a later sync removes exactly these entries
 /// rather than merging blindly and growing the file, and so uninstall can undo
@@ -119,7 +119,7 @@ pub trait Installer: Send + Sync {
 
     /// Install already-fetched files verbatim under `skill_name`.
     ///
-    /// `agentpm sync` uses this rather than re-rendering: the bytes on disk then
+    /// `axur sync` uses this rather than re-rendering: the bytes on disk then
     /// match the digests recorded in the lockfile, so drift is detectable
     /// without refetching, and the author's own frontmatter is preserved.
     fn install_files(&self, skill_name: &str, files: &[(String, Vec<u8>)]) -> Result<PathBuf> {

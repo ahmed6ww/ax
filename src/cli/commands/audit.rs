@@ -1,4 +1,4 @@
-//! `agentpm audit` — what is authorised to run on this machine.
+//! `axur audit` — what is authorised to run on this machine.
 //!
 //! Read-only. Answers the question a security review actually asks: not "what
 //! skills are installed" but "what code did installing them authorise, where
@@ -15,7 +15,7 @@ use crate::core::trust::{Grant, TrustStore};
 use crate::utils::{paths, ui};
 
 pub async fn execute(revoke: Option<String>) -> Result<()> {
-    ui::intro("agentpm audit");
+    ui::intro("axur audit");
 
     let mut store = TrustStore::load()?;
 
@@ -32,7 +32,7 @@ pub async fn execute(revoke: Option<String>) -> Result<()> {
             ui::bold(&label),
             removed
         ));
-        ui::outro("agentpm will ask again next sync");
+        ui::outro("axur will ask again next sync");
         return Ok(());
     }
 
@@ -81,7 +81,7 @@ pub async fn execute(revoke: Option<String>) -> Result<()> {
         "{} authorised {} revoke with {}",
         store.entries.len(),
         ui::dim("·"),
-        ui::accent("agentpm audit --revoke <name>")
+        ui::accent("axur audit --revoke <name>")
     ));
 
     Ok(())
@@ -107,7 +107,7 @@ fn report_unapproved(store: &TrustStore) -> Result<usize> {
         .iter()
         .filter(|m| {
             let request =
-                crate::core::trust::Request::mcp(&m.name, &m.command, &m.args, "agentpm.toml");
+                crate::core::trust::Request::mcp(&m.name, &m.command, &m.args, "axur.toml");
             !store.is_approved(&request)
         })
         .map(|m| {
@@ -133,7 +133,7 @@ fn report_unapproved(store: &TrustStore) -> Result<usize> {
             "
 "
         ),
-        ui::dim("agentpm sync will ask before installing these")
+        ui::dim("axur sync will ask before installing these")
     ));
 
     Ok(pending.len())

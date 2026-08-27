@@ -23,7 +23,7 @@ pub const BUNDLE_FILE: &str = "BUNDLE.toml";
 ///
 /// Hook scripts need a stable on-disk home that `settings.json` can reference,
 /// and keeping them under one directory makes removal exact.
-pub const BUNDLE_STAGE_DIR: &str = "agentpm";
+pub const BUNDLE_STAGE_DIR: &str = "axur";
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

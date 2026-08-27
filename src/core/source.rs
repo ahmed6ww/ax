@@ -3,7 +3,7 @@
 //! A source is `owner/repo` on GitHub. Resolution happens in three steps:
 //!
 //! 1. A ref (branch, tag, or commit) resolves to a **commit SHA**. Everything
-//!    after this point is pinned, which is what makes `agentpm.lock`
+//!    after this point is pinned, which is what makes `axur.lock`
 //!    reproducible rather than a record of what HEAD happened to be.
 //! 2. The git tree API returns the **actual file list** under the skill's
 //!    directory. Earlier versions guessed twelve filenames and ignored 404s, so
@@ -20,7 +20,7 @@ use std::time::Duration;
 use crate::core::cache::Cache;
 use crate::core::lockfile::{digest, LockedFile};
 
-/// Largest file agentpm will pull into a skill directory.
+/// Largest file axur will pull into a skill directory.
 const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
 
 /// Concurrent file fetches per skill.
@@ -160,7 +160,7 @@ impl SourceClient {
             .timeout(Duration::from_secs(30))
             .connect_timeout(Duration::from_secs(10))
             .redirect(reqwest::redirect::Policy::limited(5))
-            .user_agent(concat!("agentpm/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("axur/", env!("CARGO_PKG_VERSION")))
             .build()
             .context("Failed to build the HTTP client")?;
 
@@ -479,7 +479,7 @@ impl SourceClient {
 /// The frontmatter fields the Agent Skills standard requires.
 ///
 /// Unknown fields are ignored: a skill may carry `allowed-tools`, `license` and
-/// anything else the target understands, and agentpm has no business rejecting
+/// anything else the target understands, and axur has no business rejecting
 /// keys it does not know about.
 #[derive(Debug, Deserialize)]
 struct SkillFrontmatter {

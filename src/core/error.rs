@@ -12,7 +12,7 @@
 
 use std::process::ExitCode;
 
-/// Exit codes agentpm promises. These are part of the interface: a script that
+/// Exit codes axur promises. These are part of the interface: a script that
 /// branches on them should keep working across releases.
 pub mod exit {
     /// Everything succeeded.
@@ -87,7 +87,7 @@ pub fn exit_code_for(error: &anyhow::Error) -> u8 {
 
     // Fallback classification. Message matching is unlovely, but a wrong exit
     // code is better than collapsing every failure onto 1, and the strings
-    // below are ones agentpm itself produces.
+    // below are ones axur itself produces.
     let text = format!("{:#}", error).to_lowercase();
     let has = |needles: &[&str]| needles.iter().any(|n| text.contains(n));
 

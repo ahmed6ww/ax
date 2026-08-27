@@ -1,6 +1,6 @@
-//! `agentpm list` — show what this project has installed.
+//! `axur list` — show what this project has installed.
 //!
-//! Reads `agentpm.lock`, not a remote catalogue. The answer to "what is
+//! Reads `axur.lock`, not a remote catalogue. The answer to "what is
 //! installed" has to come from the lockfile, because that is the only record
 //! of which commits are actually on disk.
 
@@ -14,15 +14,15 @@ use crate::core::manifest::{Manifest, MANIFEST_FILE};
 use crate::utils::{paths, ui};
 
 pub async fn execute() -> Result<()> {
-    ui::intro("agentpm list");
+    ui::intro("axur list");
 
     let project_root = paths::project_root()?;
     let Some(manifest_path) = Manifest::find(&project_root) else {
         ui::warning(&format!("No {} in this project", MANIFEST_FILE));
         ui::note(
             "Get started",
-            "agentpm init                       set up the manifest\n\
-             agentpm install <owner>/<repo>#<path>   add a skill or bundle",
+            "axur init                       set up the manifest\n\
+             axur install <owner>/<repo>#<path>   add a skill or bundle",
         );
         ui::outro("Nothing installed");
         return Ok(());
@@ -31,7 +31,7 @@ pub async fn execute() -> Result<()> {
     let lock_path = Lockfile::path_for(manifest_path.parent().unwrap_or(&project_root));
     if !lock_path.exists() {
         ui::warning("Declared but never synced");
-        ui::note("Next", "Run agentpm sync to install and lock.");
+        ui::note("Next", "Run axur sync to install and lock.");
         ui::outro("Nothing installed");
         return Ok(());
     }
