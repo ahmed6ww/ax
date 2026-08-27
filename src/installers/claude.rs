@@ -1,359 +1,397 @@
 //! Claude Code Installer
 //!
-//! Installs agent configurations into Claude Code's native format.
+//! Writes into the locations Claude Code documents at
+//! <https://code.claude.com/docs/en/skills>:
 //!
-//! Output structure:
-//! - ~/.claude/agents/{name}.md - Agent as Markdown with YAML frontmatter
-//! - claude_desktop_config.json - MCP tool configuration
+//! - subagent:  `<scope>/agents/<name>.md`
+//! - skills:    `<scope>/skills/<name>/SKILL.md`
+//! - MCP:       `.mcp.json` (project) or `~/.claude.json` (user)
+//!
+//! where `<scope>` is `~/.claude` for user scope and `<repo>/.claude` for
+//! project scope. Claude Desktop's Application Support directory is a different
+//! product and is deliberately not used here.
 
 use anyhow::{Context, Result};
-use serde_json::{json, Value};
-use colored::Colorize;
+use serde_json::{json, Map, Value};
 use std::fs;
 use std::path::PathBuf;
 
-use super::Installer;
-use crate::core::agent::AgentConfig;
-use crate::utils::paths;
+use super::common::{safe_join, skill_dir, write_atomic, write_atomic_preserving};
+use super::{Capabilities, Installer, SettingsContribution};
+use crate::utils::paths::{self, Scope};
 
-/// Installer for Claude Code
 pub struct ClaudeInstaller {
-    /// Whether to install globally
-    global: bool,
+    scope: Scope,
 }
 
 impl ClaudeInstaller {
-    pub fn new(global: bool) -> Self {
-        Self { global }
+    pub fn new(scope: Scope) -> Self {
+        Self { scope }
     }
 
-    /// Get the base directory for Claude configuration
-    fn get_base_dir(&self) -> Result<PathBuf> {
-        paths::claude_config_dir()
-            .context("Could not find Claude configuration directory")
+    fn skills_dir(&self) -> Result<PathBuf> {
+        paths::claude_skills_dir(self.scope)
     }
 
-    /// Get the agents directory
-    fn get_agents_dir(&self) -> Result<PathBuf> {
-        Ok(self.get_base_dir()?.join("agents"))
+    /// Slash commands: `<scope>/commands/<name>.md`.
+    fn commands_dir(&self) -> Result<PathBuf> {
+        Ok(paths::claude_dir(self.scope)?.join("commands"))
     }
 
-    /// Get the Claude Code config path for MCP servers
-    /// On Linux: ~/.config/claude/config.json
-    /// On macOS: ~/Library/Application Support/Claude/config.json
-    fn get_mcp_config_path(&self) -> Result<PathBuf> {
-        #[cfg(target_os = "linux")]
-        {
-            let config_dir = dirs::config_dir()
-                .context("Could not find config directory")?;
-            Ok(config_dir.join("claude").join("config.json"))
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            let home = dirs::home_dir()
-                .context("Could not find home directory")?;
-            Ok(home.join("Library/Application Support/Claude/config.json"))
-        }
-
-        #[cfg(target_os = "windows")]
-        {
-            let config_dir = dirs::config_dir()
-                .context("Could not find config directory")?;
-            Ok(config_dir.join("Claude").join("config.json"))
-        }
-
-        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-        {
-            let home = dirs::home_dir()
-                .context("Could not find home directory")?;
-            Ok(home.join(".claude.json"))
-        }
+    /// Shared project settings — the file a team commits.
+    fn settings_path(&self) -> Result<PathBuf> {
+        Ok(paths::claude_dir(self.scope)?.join("settings.json"))
     }
 
-    /// Generate the markdown content with YAML frontmatter
-    fn generate_agent_markdown(agent: &AgentConfig) -> String {
-        let icon = agent.identity.icon.as_deref().unwrap_or("🤖");
-        let model = agent.identity.model.as_deref().unwrap_or("sonnet");
-        
-        // Extract just the model name (e.g., "sonnet" from "claude-3-5-sonnet-latest")
-        let model_short = if model.contains("sonnet") {
-            "sonnet"
-        } else if model.contains("opus") {
-            "opus"
-        } else if model.contains("haiku") {
-            "haiku"
-        } else {
-            model
-        };
-
-        // Format skills list for frontmatter
-        let skills_list = if !agent.skills.is_empty() {
-            let names: Vec<String> = agent.skills.iter().map(|s| s.name.clone()).collect();
-            format!("\nskills: {}", names.join(", "))
-        } else {
-            String::new()
-        };
-
-        format!(
-            r#"---
-name: {}
-description: {}
-model: {}
-icon: {}{}
----
-
-{}"#,
-            agent.name,
-            agent.description,
-            model_short,
-            icon,
-            skills_list,
-            agent.identity.system_prompt
-        )
+    /// Where a bundle's own scripts are staged, so `settings.json` can point at
+    /// a stable path and removal stays exact.
+    fn bundle_stage_dir(&self) -> Result<PathBuf> {
+        Ok(paths::claude_dir(self.scope)?.join(crate::core::bundle::BUNDLE_STAGE_DIR))
     }
 
-    /// Generate SKILL.md content per Agent Skills standard
-    /// Format:
-    /// ---
-    /// name: skill-name
-    /// description: Description that helps select the skill
-    /// allowed-tools: (optional)
-    /// ---
-    /// Skill instructions...
-    fn generate_skill_md(skill: &crate::core::agent::Skill) -> String {
-        let mut frontmatter = format!("---\nname: {}\n", skill.name);
-        
-        // Add description (required by Agent Skills spec)
-        if let Some(desc) = &skill.description {
-            frontmatter.push_str(&format!("description: {}\n", desc));
-        }
-        
-        // Add optional fields
-        if let Some(license) = &skill.license {
-            frontmatter.push_str(&format!("license: {}\n", license));
-        }
-        
-        if let Some(compat) = &skill.compatibility {
-            frontmatter.push_str(&format!("compatibility: {}\n", compat));
-        }
-        
-        if let Some(tools) = &skill.allowed_tools {
-            frontmatter.push_str(&format!("allowed-tools: {}\n", tools));
-        }
-        
-        if let Some(deps) = &skill.dependencies {
-            frontmatter.push_str(&format!("dependencies: {}\n", deps));
-        }
-        
-        // Add metadata if present
-        if let Some(metadata) = &skill.metadata {
-            frontmatter.push_str("metadata:\n");
-            for (key, value) in metadata {
-                frontmatter.push_str(&format!("  {}: {}\n", key, value));
-            }
-        }
-        
-        frontmatter.push_str("---\n\n");
-        frontmatter.push_str(&skill.content);
-        
-        frontmatter
-    }
-
-    /// Copy scripts/, references/, and assets/ subdirectories from source to destination
-    fn copy_skill_subdirectories(source_dir: &std::path::Path, dest_dir: &std::path::Path) -> Result<()> {
-        let subdirs = ["scripts", "references", "assets"];
-        
-        for subdir in &subdirs {
-            let source_subdir = source_dir.join(subdir);
-            if source_subdir.exists() && source_subdir.is_dir() {
-                let dest_subdir = dest_dir.join(subdir);
-                Self::copy_dir_recursive(&source_subdir, &dest_subdir)?;
-            }
-        }
-        
-        Ok(())
-    }
-
-    /// Recursively copy a directory
-    fn copy_dir_recursive(source: &std::path::Path, dest: &std::path::Path) -> Result<()> {
-        fs::create_dir_all(dest)?;
-        
-        for entry in fs::read_dir(source)? {
-            let entry = entry?;
-            let path = entry.path();
-            let dest_path = dest.join(entry.file_name());
-            
-            if path.is_dir() {
-                Self::copy_dir_recursive(&path, &dest_path)?;
-            } else {
-                fs::copy(&path, &dest_path)?;
-            }
-        }
-        
-        Ok(())
-    }
-
-    /// Download scripts/, references/, and assets/ subdirectories from remote URL
-    fn download_skill_subdirectories(remote_base_url: &str, dest_dir: &std::path::Path) -> Result<()> {
-        let subdir_files = [
-            ("scripts", vec!["run_ruff.py", "scaffold_test.py", "main.py", "setup.py"]),
-            ("references", vec!["cleanup_rules.md", "clean_rules.md", "quad_strategy.md", "repo_strategy.md", "clean_arch.md", "REFERENCE.md"]),
-            ("assets", vec!["project_layout.txt", "template.json"]),
-        ];
-
-        for (subdir, files) in &subdir_files {
-            let dest_subdir = dest_dir.join(subdir);
-            let mut any_downloaded = false;
-
-            for file in files {
-                let file_url = format!("{}/{}/{}", remote_base_url, subdir, file);
-                let dest_file = dest_subdir.join(file);
-
-                if Self::download_remote_file(&file_url, &dest_file).is_ok() {
-                    any_downloaded = true;
-                }
-            }
-
-            if any_downloaded && !dest_subdir.exists() {
-                fs::create_dir_all(&dest_subdir)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Download a single file from a remote URL (blocking)
-    fn download_remote_file(url: &str, dest_path: &std::path::Path) -> Result<()> {
-        let response = reqwest::blocking::get(url)?;
-
-        if !response.status().is_success() {
-            anyhow::bail!("File not found: {}", url);
-        }
-
-        if let Some(parent) = dest_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        let content = response.bytes()?;
-        fs::write(dest_path, &content)?;
-
-        Ok(())
+    fn agents_dir(&self) -> Result<PathBuf> {
+        paths::claude_agents_dir(self.scope)
     }
 }
 
 impl Installer for ClaudeInstaller {
-    fn install_identity(&self, agent: &AgentConfig) -> Result<()> {
-        let agents_dir = self.get_agents_dir()?;
-        fs::create_dir_all(&agents_dir)?;
-
-        // Create the agent markdown file (Claude Code format)
-        let agent_file = agents_dir.join(format!("{}.md", agent.name));
-        let markdown_content = Self::generate_agent_markdown(agent);
-        
-        fs::write(&agent_file, markdown_content)?;
-
-        Ok(())
+    fn capabilities(&self) -> Capabilities {
+        Capabilities {
+            subagents: true,
+            skills: true,
+            mcp: true,
+            project_scope: true,
+            commands: true,
+            hooks: true,
+            permissions: true,
+        }
     }
 
-    fn install_skills(&self, agent: &AgentConfig) -> Result<()> {
-        if agent.skills.is_empty() {
+    fn skills_root(&self) -> Result<PathBuf> {
+        self.skills_dir()
+    }
+
+    fn install_subagent(&self, name: &str, contents: &[u8]) -> Result<()> {
+        let file = safe_join(&self.agents_dir()?, &format!("{}.md", name))?;
+        write_atomic(&file, contents)
+    }
+
+    fn install_command(&self, name: &str, contents: &[u8]) -> Result<()> {
+        let file = safe_join(&self.commands_dir()?, &format!("{}.md", name))?;
+        write_atomic(&file, contents)
+    }
+
+    fn stage_bundle_files(
+        &self,
+        bundle: &str,
+        files: &[(String, Vec<u8>)],
+    ) -> Result<Option<PathBuf>> {
+        if files.is_empty() {
+            return Ok(None);
+        }
+
+        let dir = safe_join(&self.bundle_stage_dir()?, bundle)?;
+        for (relative, bytes) in files {
+            write_atomic(&safe_join(&dir, relative)?, bytes)?;
+        }
+        Ok(Some(dir))
+    }
+
+    fn apply_settings(
+        &self,
+        contribution: &SettingsContribution,
+        previous: &SettingsContribution,
+    ) -> Result<()> {
+        if contribution.is_empty() && previous.is_empty() {
             return Ok(());
         }
 
-        let base_dir = self.get_base_dir()?;
-        // Skills go in ~/.claude/skills/<skill-name>/SKILL.md (Agent Skills standard)
-        let skills_dir = base_dir.join("skills");
-        fs::create_dir_all(&skills_dir)?;
+        let path = self.settings_path()?;
+        let mut settings = read_json_object(&path)?;
 
-        for skill in &agent.skills {
-            // Create skill directory: ~/.claude/skills/<skill-name>/
-            let skill_folder = skills_dir.join(&skill.name);
-            fs::create_dir_all(&skill_folder)?;
+        apply_permissions(
+            &mut settings,
+            &contribution.permissions,
+            &previous.permissions,
+        )?;
+        apply_hooks(&mut settings, &contribution.hooks, &previous.hooks)?;
 
-            // Generate SKILL.md with proper frontmatter
-            let skill_content = Self::generate_skill_md(skill);
-            let skill_file = skill_folder.join("SKILL.md");
-            fs::write(&skill_file, skill_content)?;
-
-            // Copy subdirectories (scripts, references, assets)
-            if let Some(source_dir) = &skill.source_dir {
-                // Local source - copy directly
-                Self::copy_skill_subdirectories(source_dir, &skill_folder)?;
-            } else if let Some(remote_url) = &skill.remote_base_url {
-                // Remote source - download subdirectories
-                Self::download_skill_subdirectories(remote_url, &skill_folder)?;
-            }
-        }
-
-        Ok(())
+        let rendered = format!("{}\n", serde_json::to_string_pretty(&settings)?);
+        write_atomic_preserving(&path, rendered.as_bytes())
     }
 
-    fn install_tools(&self, agent: &AgentConfig) -> Result<()> {
-        if agent.mcp.is_empty() {
+    fn install_mcp(&self, tools: &[crate::core::agent::McpTool]) -> Result<()> {
+        if tools.is_empty() {
             return Ok(());
         }
 
-        let config_path = self.get_mcp_config_path()?;
+        let config_path = paths::claude_mcp_config(self.scope)?;
 
-        // Load existing config or create new one
+        // Preserve everything already in the file. `~/.claude.json` in
+        // particular holds unrelated Claude Code state, and a parse failure
+        // means we refuse rather than replace — silently discarding a user's
+        // configured servers is worse than failing the install.
         let mut config: Value = if config_path.exists() {
-            let content = fs::read_to_string(&config_path)?;
-            serde_json::from_str(&content).unwrap_or_else(|_| json!({}))
+            let content = fs::read_to_string(&config_path)
+                .with_context(|| format!("Failed to read {}", config_path.display()))?;
+            if content.trim().is_empty() {
+                json!({})
+            } else {
+                serde_json::from_str(&content).with_context(|| {
+                    format!(
+                        "{} is not valid JSON. axur will not overwrite it — \
+                         fix or move the file, then retry.",
+                        config_path.display()
+                    )
+                })?
+            }
         } else {
             json!({})
         };
 
-        // Ensure mcpServers object exists
-        if config.get("mcpServers").is_none() {
-            config["mcpServers"] = json!({});
+        if !config.is_object() {
+            anyhow::bail!("{} does not contain a JSON object", config_path.display());
         }
 
-        // Add each MCP tool
-        for tool in &agent.mcp {
-            // Claude Code uses "type": "stdio" format
-            let tool_config = json!({
+        let servers = config
+            .as_object_mut()
+            .unwrap()
+            .entry("mcpServers")
+            .or_insert_with(|| Value::Object(Map::new()));
+
+        if !servers.is_object() {
+            anyhow::bail!(
+                "\"mcpServers\" in {} is not a JSON object",
+                config_path.display()
+            );
+        }
+
+        for tool in tools {
+            servers[&tool.name] = json!({
                 "type": "stdio",
                 "command": tool.command,
                 "args": tool.args,
-                "env": tool.env
+                "env": tool.env,
             });
-            config["mcpServers"][&tool.name] = tool_config;
-
-            // Check for setup URL (API key requirement)
-            if let Some(url) = &tool.setup_url {
-                println!("\n  {} Setup required for MCP tool '{}'", "ℹ".blue().bold(), tool.name.bold());
-                println!("  {} Get your API key here: {}", "→".cyan(), url.underline().blue());
-            }
         }
 
-        // Ensure parent directory exists
-        if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        // Write the updated config
-        fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
-
-        Ok(())
+        let rendered = serde_json::to_string_pretty(&config)? + "\n";
+        write_atomic_preserving(&config_path, rendered.as_bytes())
     }
 
     fn uninstall(&self, agent_name: &str) -> Result<()> {
-        // Remove agent file
-        let agent_file = self.get_agents_dir()?.join(format!("{}.md", agent_name));
+        let agent_file = skill_dir(&self.agents_dir()?, &format!("{}.md", agent_name))?;
         if agent_file.exists() {
             fs::remove_file(&agent_file)?;
         }
 
-        // Remove skills directory
-        let skills_dir = self.get_base_dir()?.join("skills").join(agent_name);
-        if skills_dir.exists() {
-            fs::remove_dir_all(&skills_dir)?;
+        let skill_folder = skill_dir(&self.skills_dir()?, agent_name)?;
+        if skill_folder.exists() {
+            crate::core::tx::remove_dir_all(&skill_folder)?;
         }
-
-        // Note: MCP tools are not removed as they might be used by other agents
 
         Ok(())
     }
+
+    fn location(&self) -> String {
+        match self.skills_dir() {
+            Ok(path) => crate::utils::paths::display_relative(&path),
+            Err(_) => "<unresolved>".to_string(),
+        }
+    }
 }
 
+// ---------------------------------------------------------------------------
+// settings.json merging
+//
+// axur shares this file with the user, so a sync must add its own entries,
+// remove the ones a previous sync added, and leave everything else untouched.
+// Tracking the previous contribution in the lockfile — rather than tagging
+// entries in the file — keeps settings.json free of axur-specific keys that
+// Claude Code would not recognize.
+// ---------------------------------------------------------------------------
+
+/// Read a JSON object, refusing to proceed on a parse error.
+fn read_json_object(path: &std::path::Path) -> Result<Value> {
+    if !path.exists() {
+        return Ok(json!({}));
+    }
+
+    let content =
+        fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
+    if content.trim().is_empty() {
+        return Ok(json!({}));
+    }
+
+    let value: Value = serde_json::from_str(&content).with_context(|| {
+        format!(
+            "{} is not valid JSON. axur will not overwrite it — fix or move \
+             the file, then retry.",
+            path.display()
+        )
+    })?;
+
+    if !value.is_object() {
+        anyhow::bail!("{} does not contain a JSON object", path.display());
+    }
+
+    Ok(value)
+}
+
+fn string_list(value: Option<&Value>) -> Vec<String> {
+    value
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn apply_permissions(
+    settings: &mut Value,
+    wanted: &crate::core::bundle::Permissions,
+    previous: &crate::core::bundle::Permissions,
+) -> Result<()> {
+    if wanted.is_empty() && previous.is_empty() {
+        return Ok(());
+    }
+
+    let root = settings
+        .as_object_mut()
+        .expect("checked by read_json_object");
+    let permissions = root
+        .entry("permissions")
+        .or_insert_with(|| Value::Object(Map::new()));
+
+    if !permissions.is_object() {
+        anyhow::bail!("\"permissions\" in settings.json is not a JSON object");
+    }
+
+    for (key, want, prev) in [
+        ("allow", &wanted.allow, &previous.allow),
+        ("deny", &wanted.deny, &previous.deny),
+        ("ask", &wanted.ask, &previous.ask),
+    ] {
+        let mut rules = string_list(permissions.get(key));
+
+        // Drop what the last sync contributed, keep the user's own rules.
+        rules.retain(|rule| !prev.contains(rule));
+        for rule in want {
+            if !rules.contains(rule) {
+                rules.push(rule.clone());
+            }
+        }
+
+        if rules.is_empty() {
+            permissions.as_object_mut().unwrap().remove(key);
+        } else {
+            permissions[key] = json!(rules);
+        }
+    }
+
+    if permissions
+        .as_object()
+        .map(|o| o.is_empty())
+        .unwrap_or(false)
+    {
+        root.remove("permissions");
+    }
+
+    Ok(())
+}
+
+fn apply_hooks(
+    settings: &mut Value,
+    wanted: &[(crate::core::bundle::Hook, String)],
+    previous: &[(crate::core::bundle::Hook, String)],
+) -> Result<()> {
+    if wanted.is_empty() && previous.is_empty() {
+        return Ok(());
+    }
+
+    let root = settings
+        .as_object_mut()
+        .expect("checked by read_json_object");
+    let hooks = root
+        .entry("hooks")
+        .or_insert_with(|| Value::Object(Map::new()));
+
+    if !hooks.is_object() {
+        anyhow::bail!("\"hooks\" in settings.json is not a JSON object");
+    }
+
+    // Commands a previous sync installed, so its entries can be recognized.
+    let stale: Vec<&str> = previous.iter().map(|(_, cmd)| cmd.as_str()).collect();
+
+    let mut events: Vec<String> = wanted.iter().map(|(h, _)| h.event.clone()).collect();
+    events.extend(previous.iter().map(|(h, _)| h.event.clone()));
+    events.sort();
+    events.dedup();
+
+    for event in events {
+        let mut matchers: Vec<Value> = hooks
+            .get(&event)
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        // Strip previously contributed handlers, and any matcher group left empty.
+        for group in matchers.iter_mut() {
+            if let Some(list) = group.get_mut("hooks").and_then(|v| v.as_array_mut()) {
+                list.retain(|entry| {
+                    entry
+                        .get("command")
+                        .and_then(|c| c.as_str())
+                        .map(|c| !stale.contains(&c))
+                        .unwrap_or(true)
+                });
+            }
+        }
+        matchers.retain(|group| {
+            group
+                .get("hooks")
+                .and_then(|v| v.as_array())
+                .map(|l| !l.is_empty())
+                .unwrap_or(false)
+        });
+
+        for (hook, command) in wanted.iter().filter(|(h, _)| h.event == event) {
+            let entry = hook.to_settings_entry(command);
+            let matcher = hook.matcher.as_deref();
+
+            // Reuse an existing group with the same matcher so the file stays flat.
+            let existing = matchers
+                .iter_mut()
+                .find(|group| group.get("matcher").and_then(|m| m.as_str()) == matcher);
+
+            match existing {
+                Some(group) => {
+                    if let Some(list) = group.get_mut("hooks").and_then(|v| v.as_array_mut()) {
+                        list.push(entry);
+                    }
+                }
+                None => {
+                    let mut group = json!({ "hooks": [entry] });
+                    if let Some(m) = matcher {
+                        group["matcher"] = json!(m);
+                    }
+                    matchers.push(group);
+                }
+            }
+        }
+
+        if matchers.is_empty() {
+            hooks.as_object_mut().unwrap().remove(&event);
+        } else {
+            hooks[&event] = Value::Array(matchers);
+        }
+    }
+
+    if hooks.as_object().map(|o| o.is_empty()).unwrap_or(false) {
+        root.remove("hooks");
+    }
+
+    Ok(())
+}

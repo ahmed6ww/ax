@@ -2,24 +2,25 @@
 //!
 //! Checks for required tool dependencies.
 
-use crate::core::agent::AgentConfig;
+use crate::core::agent::McpTool;
 
 /// Check if a tool is available in PATH
 pub fn is_tool_available(name: &str) -> bool {
     which::which(name).is_ok()
 }
 
-/// Check agent dependencies and return missing tools
-pub fn check_agent_dependencies(agent: &AgentConfig) -> Vec<String> {
-    let mut missing = Vec::new();
-
-    for tool in &agent.mcp {
-        // Check if the command exists
-        if !is_tool_available(&tool.command) {
-            missing.push(tool.command.clone());
-        }
-    }
-
+/// Commands an MCP server needs that are not on PATH.
+///
+/// A server whose command is missing fails silently at agent startup, so it is
+/// worth naming before the install completes.
+pub fn missing_mcp_commands(tools: &[McpTool]) -> Vec<String> {
+    let mut missing: Vec<String> = tools
+        .iter()
+        .filter(|tool| !is_tool_available(&tool.command))
+        .map(|tool| tool.command.clone())
+        .collect();
+    missing.sort();
+    missing.dedup();
     missing
 }
 

@@ -1,21 +1,30 @@
 [package]
-name = "ax"
-version = "1.5.0"
+name = "axur"
+version = "0.1.0"
 edition = "2021"
 authors = ["ahmed6ww"]
-description = "AX - The Agent Package Manager"
+description = "Keep your team running the same agent setup on Claude Code and Codex"
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/ahmed6ww/ax"
-keywords = ["ai", "agents", "cli", "claude", "cursor"]
+repository = "https://github.com/agenzalabs/ax"
+keywords = ["ai", "agents", "cli", "claude", "codex"]
 categories = ["command-line-utilities", "development-tools"]
+exclude = [
+    "docs/",
+    "npm/",
+    "scripts/",
+    ".github/",
+    ".agent/",
+    "install.sh",
+    "install.ps1",
+]
 
 [[bin]]
-name = "ax"
+name = "axur"
 path = "src/main.rs"
 
 [lib]
-name = "ax_lib"
+name = "axur_lib"
 path = "src/lib.rs"
 
 [dependencies]
@@ -24,12 +33,14 @@ clap = { version = "4.4", features = ["derive", "color", "suggestions"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
-serde_yaml = "0.9"
 serde_json = "1.0"
 toml = "0.8"
 
 # HTTP Client
-reqwest = { version = "0.11", features = ["json", "rustls-tls", "blocking"], default-features = false }
+# 0.12 for hyper 1.x: 0.11 pinned hyper 0.14, dragging in h2 0.3 and
+# rustls 0.21, which carry four open RUSTSEC advisories between them.
+# The "blocking" feature was enabled and never used.
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 
 # Async Runtime
 tokio = { version = "1.0", features = ["full"] }
@@ -38,9 +49,10 @@ tokio = { version = "1.0", features = ["full"] }
 dirs = "5.0"
 
 # Terminal UI
-indicatif = "0.17"
-colored = "2.0"
-console = "0.15"
+cliclack = "0.5"
+comfy-table = "8.0"
+indicatif = "0.18"
+console = "0.16"
 
 # Error Handling
 anyhow = "1.0"
@@ -48,6 +60,10 @@ thiserror = "1.0"
 
 # Utilities
 which = "6.0"
+rpassword = "7.3"
+sha2 = "0.10"
+futures = "0.3"
+serde-saphyr = "1"
 
 [dev-dependencies]
 tempfile = "3.10"

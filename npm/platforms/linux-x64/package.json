@@ -1,0 +1,20 @@
+{
+  "name": "@axur/linux-x64",
+  "version": "0.0.0",
+  "description": "Linux x64 binary for axur",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agenzalabs/ax.git"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "files": [
+    "bin"
+  ],
+  "preferUnplugged": true
+}

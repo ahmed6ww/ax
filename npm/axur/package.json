@@ -1,0 +1,41 @@
+{
+  "name": "axur",
+  "version": "0.0.0",
+  "description": "Keep your team running the same agent setup on Claude Code and Codex",
+  "license": "MIT",
+  "author": "ahmed6ww",
+  "homepage": "https://github.com/agenzalabs/ax#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agenzalabs/ax.git"
+  },
+  "bugs": {
+    "url": "https://github.com/agenzalabs/ax/issues"
+  },
+  "keywords": [
+    "claude-code",
+    "codex",
+    "agent",
+    "skills",
+    "mcp",
+    "package-manager",
+    "cli"
+  ],
+  "bin": {
+    "axur": "bin/axur.js"
+  },
+  "files": [
+    "bin/axur.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "@axur/darwin-arm64": "0.0.0",
+    "@axur/darwin-x64": "0.0.0",
+    "@axur/linux-arm64": "0.0.0",
+    "@axur/linux-x64": "0.0.0",
+    "@axur/win32-x64": "0.0.0"
+  }
+}

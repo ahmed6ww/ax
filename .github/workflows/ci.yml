@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Dependencies are audited on a schedule too: an advisory can land against a
+  # version already pinned in Cargo.lock, with no commit to trigger a run.
+  schedule:
+    - cron: "0 6 * * 1"
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Format and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+  test:
+    name: Test ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # All three, because the bug that made every release unusable was a
+        # per-platform path difference that only a real run on that platform
+        # would have caught.
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Test
+        run: cargo test --all-targets --all-features
+        env:
+          # The integration tests never touch the network, but a token avoids
+          # any incidental rate limiting if that ever changes.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Smoke test the binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          ./target/release/axur --version
+          ./target/release/axur --help
+          # A fresh directory has no manifest; the command must say so and fail
+          # cleanly rather than panic.
+          mkdir -p "$RUNNER_TEMP/empty" && cd "$RUNNER_TEMP/empty"
+          if "$GITHUB_WORKSPACE/target/release/axur" sync; then
+            echo "sync should fail without a manifest" && exit 1
+          fi
+
+      - name: Smoke test the binary (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          .\target\release\axur.exe --version
+          .\target\release\axur.exe --help
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  deny:
+    name: Licences and bans
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check bans licenses sources

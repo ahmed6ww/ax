@@ -8,29 +8,20 @@ use std::path::Path;
 
 /// APM Configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ApmConfig {
-    /// Default target for installations (claude, cursor)
+pub struct Config {
+    /// Default target for installations (claude-code, codex)
     pub default_target: String,
-
-    /// Registry URL (defaults to GitHub)
-    #[serde(default = "default_registry_url")]
-    pub registry_url: String,
 
     /// Whether to show verbose output
     #[serde(default)]
     pub verbose: bool,
 }
 
-fn default_registry_url() -> String {
-    "https://raw.githubusercontent.com/ahmed6ww/ax-agents/main".to_string()
-}
-
-impl ApmConfig {
+impl Config {
     /// Create a new configuration with default settings
     pub fn new(default_target: String) -> Self {
         Self {
             default_target,
-            registry_url: default_registry_url(),
             verbose: false,
         }
     }
@@ -51,7 +42,7 @@ impl ApmConfig {
 
     /// Load configuration or create default
     pub fn load_or_default() -> Result<Self> {
-        let path = crate::utils::paths::ax_config_path()?;
+        let path = crate::utils::paths::axur_config_path()?;
         if path.exists() {
             Self::load(&path)
         } else {
@@ -60,7 +51,7 @@ impl ApmConfig {
     }
 }
 
-impl Default for ApmConfig {
+impl Default for Config {
     fn default() -> Self {
         Self::new("claude".to_string())
     }

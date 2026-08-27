@@ -1,5 +1,5 @@
 #!/bin/bash
-# AX Release Script
+# axur Release Script
 # Usage: ./scripts/release.sh <version>
 # Example: ./scripts/release.sh 1.5.0
 
@@ -25,7 +25,7 @@ TAG="v$VERSION"
 
 echo -e "${CYAN}"
 echo "╔═══════════════════════════════════════╗"
-echo "║     AX Release Automation             ║"
+echo "║     axur Release Automation             ║"
 echo "╚═══════════════════════════════════════╝"
 echo -e "${NC}"
 
@@ -85,8 +85,8 @@ echo -e "${GREEN}║   Release $TAG initiated!              ${NC}"
 echo -e "${GREEN}╚═══════════════════════════════════════╝${NC}"
 echo ""
 echo "Next steps:"
-echo "  1. Monitor GitHub Actions: https://github.com/ahmed6ww/ax/actions"
-echo "  2. Once complete, verify release: https://github.com/ahmed6ww/ax/releases"
+echo "  1. Monitor GitHub Actions: https://github.com/agenzalabs/ax/actions"
+echo "  2. Once complete, verify release: https://github.com/agenzalabs/ax/releases"
 echo "  3. Test install script:"
-echo "     curl -fsSL https://raw.githubusercontent.com/ahmed6ww/ax/main/install.sh | bash"
+echo "     curl -fsSL https://raw.githubusercontent.com/agenzalabs/ax/main/install.sh | bash"
 echo ""

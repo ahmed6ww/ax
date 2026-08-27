@@ -1,5 +1,4 @@
 /target
-Cargo.lock
 **/*.rs.bk
 *.pdb
 .DS_Store
@@ -8,3 +7,8 @@ Cargo.lock
 *~
 .idea/
 .vscode/
+
+# npm release outputs — placed by scripts/npm-prepare.mjs at publish time
+npm/axur/README.md
+npm/platforms/*/bin/axur
+npm/platforms/*/bin/axur.exe

@@ -1,0 +1,425 @@
+//! `axur.lock` — the resolved state of `axur.toml`.
+//!
+//! Committed to the repository so a teammate, a fresh clone, or CI reproduces
+//! the same agent configuration rather than whatever the sources happen to be
+//! serving today.
+//!
+//! Two fields make it a lock rather than a history, and they are precisely the
+//! two the comparable tools omit: `resolved`, the commit every source was
+//! pinned to, and a digest for every file installed. Without a resolved commit
+//! an update fetches HEAD; without digests nothing detects drift.
+//!
+//! No timestamp is recorded. A regenerated lock should produce an empty diff
+//! when nothing changed, and a `generated_at` field guarantees the opposite.
+
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+
+pub const LOCKFILE: &str = "axur.lock";
+pub const LOCK_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Lockfile {
+    pub version: u32,
+
+    /// Resolved skills, ordered by name so the file diffs cleanly.
+    #[serde(default, rename = "skill")]
+    pub skills: Vec<LockedSkill>,
+
+    /// Resolved bundles.
+    #[serde(default, rename = "bundle")]
+    pub bundles: Vec<LockedBundle>,
+
+    /// Resolved MCP servers.
+    #[serde(default, rename = "mcp")]
+    pub mcp: Vec<LockedMcp>,
+}
+
+/// A resolved bundle, and what it contributed to each target's settings.
+///
+/// The contribution is recorded so the next sync removes exactly these entries
+/// before applying the current set. Without it, merging into a shared
+/// `settings.json` would either grow the file on every run or require axur
+/// to guess which rules are its own.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LockedBundle {
+    pub name: String,
+    pub source: String,
+    pub source_url: String,
+    pub path: String,
+    pub resolved: String,
+    pub digest: String,
+    pub targets: Vec<String>,
+
+    /// Permission rules this bundle added.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub permissions_allow: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub permissions_deny: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub permissions_ask: Vec<String>,
+
+    /// Resolved hook script paths this bundle installed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hook_commands: Vec<String>,
+
+    #[serde(default, rename = "file")]
+    pub files: Vec<LockedFile>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LockedSkill {
+    /// Name the skill installs under.
+    pub name: String,
+    /// `owner/repo`.
+    pub source: String,
+    /// Clone URL, recorded so the lock is readable without knowing the shorthand.
+    pub source_url: String,
+    /// Directory within the repository.
+    pub path: String,
+    /// The commit this resolved to. The field that makes reproduction possible.
+    pub resolved: String,
+    /// Digest over every file below, so drift is detectable without refetching.
+    pub digest: String,
+    /// Targets this was rendered for.
+    pub targets: Vec<String>,
+    /// Every file installed, with its digest. Replaces guessing filenames.
+    #[serde(default, rename = "file")]
+    pub files: Vec<LockedFile>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LockedFile {
+    pub path: String,
+    pub digest: String,
+    pub size: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LockedMcp {
+    pub name: String,
+    pub command: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// Digest over name, command and args.
+    ///
+    /// Environment values are excluded: they routinely hold API keys, and a
+    /// lockfile is committed.
+    pub digest: String,
+}
+
+impl Lockfile {
+    pub fn new() -> Self {
+        Self {
+            version: LOCK_VERSION,
+            skills: Vec::new(),
+            bundles: Vec::new(),
+            mcp: Vec::new(),
+        }
+    }
+
+    pub fn path_for(project_root: &Path) -> PathBuf {
+        project_root.join(LOCKFILE)
+    }
+
+    pub fn load(path: &Path) -> Result<Self> {
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("Failed to read {}", path.display()))?;
+        let lock: Self = toml::from_str(&content)
+            .with_context(|| format!("Failed to parse {}", path.display()))?;
+
+        if lock.version != LOCK_VERSION {
+            anyhow::bail!(
+                "{} was written by a different version of axur (lock version {}, expected {}). \
+                 Delete it and re-run `axur sync`.",
+                path.display(),
+                lock.version,
+                LOCK_VERSION
+            );
+        }
+
+        Ok(lock)
+    }
+
+    pub fn save(&self, path: &Path) -> Result<()> {
+        let mut sorted = self.clone();
+        sorted.sort();
+        let rendered =
+            toml::to_string_pretty(&sorted).context("Failed to serialize the lockfile")?;
+        let header = format!(
+            "# Generated by `axur sync`. Commit this file.\n\
+             # Edit {} instead; running `axur sync` rewrites this one.\n\n",
+            super::manifest::MANIFEST_FILE
+        );
+        crate::installers::common::write_atomic(path, (header + &rendered).as_bytes())
+    }
+
+    pub fn bundle(&self, name: &str) -> Option<&LockedBundle> {
+        self.bundles.iter().find(|b| b.name == name)
+    }
+
+    fn sort(&mut self) {
+        self.skills.sort_by(|a, b| a.name.cmp(&b.name));
+        self.bundles.sort_by(|a, b| a.name.cmp(&b.name));
+        for bundle in &mut self.bundles {
+            bundle.files.sort_by(|a, b| a.path.cmp(&b.path));
+            bundle.targets.sort();
+        }
+        for skill in &mut self.skills {
+            skill.files.sort_by(|a, b| a.path.cmp(&b.path));
+            skill.targets.sort();
+        }
+        self.mcp.sort_by(|a, b| a.name.cmp(&b.name));
+    }
+
+    pub fn skill(&self, name: &str) -> Option<&LockedSkill> {
+        self.skills.iter().find(|s| s.name == name)
+    }
+
+    /// Differences between this lock and a freshly resolved one.
+    ///
+    /// Used by `axur sync --check` to fail CI when a working tree has drifted
+    /// from what the repository declares.
+    pub fn diff(&self, other: &Lockfile) -> Vec<Drift> {
+        let mut drift = Vec::new();
+
+        for want in &other.skills {
+            match self.skill(&want.name) {
+                None => drift.push(Drift::Added(want.name.clone())),
+                Some(have) if have.digest != want.digest => {
+                    drift.push(Drift::Changed {
+                        name: want.name.clone(),
+                        from: have.resolved.clone(),
+                        to: want.resolved.clone(),
+                    });
+                }
+                Some(_) => {}
+            }
+        }
+
+        for have in &self.skills {
+            if other.skill(&have.name).is_none() {
+                drift.push(Drift::Removed(have.name.clone()));
+            }
+        }
+
+        for want in &other.bundles {
+            match self.bundle(&want.name) {
+                None => drift.push(Drift::Added(format!("bundle:{}", want.name))),
+                Some(have) if have.digest != want.digest => {
+                    drift.push(Drift::Changed {
+                        name: format!("bundle:{}", want.name),
+                        from: have.resolved.clone(),
+                        to: want.resolved.clone(),
+                    });
+                }
+                Some(_) => {}
+            }
+        }
+
+        for have in &self.bundles {
+            if other.bundle(&have.name).is_none() {
+                drift.push(Drift::Removed(format!("bundle:{}", have.name)));
+            }
+        }
+
+        for want in &other.mcp {
+            match self.mcp.iter().find(|m| m.name == want.name) {
+                None => drift.push(Drift::Added(format!("mcp:{}", want.name))),
+                Some(have) if have.digest != want.digest => {
+                    drift.push(Drift::Changed {
+                        name: format!("mcp:{}", want.name),
+                        from: have.command.clone(),
+                        to: want.command.clone(),
+                    });
+                }
+                Some(_) => {}
+            }
+        }
+
+        for have in &self.mcp {
+            if !other.mcp.iter().any(|m| m.name == have.name) {
+                drift.push(Drift::Removed(format!("mcp:{}", have.name)));
+            }
+        }
+
+        drift
+    }
+}
+
+impl Default for Lockfile {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Drift {
+    Added(String),
+    Removed(String),
+    Changed {
+        name: String,
+        from: String,
+        to: String,
+    },
+}
+
+impl std::fmt::Display for Drift {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Drift::Added(name) => write!(f, "+ {} is required but not locked", name),
+            Drift::Removed(name) => write!(f, "- {} is locked but no longer required", name),
+            Drift::Changed { name, from, to } => {
+                let short = |s: &str| s.chars().take(12).collect::<String>();
+                write!(f, "~ {} changed ({} -> {})", name, short(from), short(to))
+            }
+        }
+    }
+}
+
+/// `sha256:<hex>` over `bytes`.
+pub fn digest(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    format!("sha256:{:x}", hasher.finalize())
+}
+
+/// A digest over an ordered set of `(path, digest)` pairs.
+///
+/// Order-independent by construction: entries are sorted before hashing, so the
+/// same tree always produces the same value.
+pub fn tree_digest(entries: &[LockedFile]) -> String {
+    let mut sorted: Vec<&LockedFile> = entries.iter().collect();
+    sorted.sort_by(|a, b| a.path.cmp(&b.path));
+
+    let mut buf = Vec::new();
+    for entry in sorted {
+        buf.extend_from_slice(entry.path.as_bytes());
+        buf.push(0);
+        buf.extend_from_slice(entry.digest.as_bytes());
+        buf.push(b'\n');
+    }
+    digest(&buf)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn file(path: &str, body: &str) -> LockedFile {
+        LockedFile {
+            path: path.to_string(),
+            digest: digest(body.as_bytes()),
+            size: body.len() as u64,
+        }
+    }
+
+    fn skill(name: &str, resolved: &str, files: Vec<LockedFile>) -> LockedSkill {
+        LockedSkill {
+            name: name.to_string(),
+            source: "owner/repo".to_string(),
+            source_url: "https://github.com/owner/repo.git".to_string(),
+            path: name.to_string(),
+            resolved: resolved.to_string(),
+            digest: tree_digest(&files),
+            targets: vec!["claude-code".to_string()],
+            files,
+        }
+    }
+
+    #[test]
+    fn digests_are_stable_and_content_sensitive() {
+        assert_eq!(digest(b"abc"), digest(b"abc"));
+        assert_ne!(digest(b"abc"), digest(b"abd"));
+        assert!(digest(b"abc").starts_with("sha256:"));
+    }
+
+    #[test]
+    fn tree_digest_ignores_ordering_but_not_content() {
+        let a = file("SKILL.md", "one");
+        let b = file("scripts/run.py", "two");
+        assert_eq!(
+            tree_digest(&[a.clone(), b.clone()]),
+            tree_digest(&[b.clone(), a.clone()])
+        );
+        assert_ne!(
+            tree_digest(&[a.clone(), b]),
+            tree_digest(&[a, file("scripts/run.py", "changed")])
+        );
+    }
+
+    #[test]
+    fn round_trips_through_toml() {
+        let mut lock = Lockfile::new();
+        lock.skills.push(skill(
+            "rust-architect",
+            "a3f9c1e",
+            vec![file("SKILL.md", "body")],
+        ));
+        let rendered = toml::to_string_pretty(&lock).unwrap();
+        let again: Lockfile = toml::from_str(&rendered).unwrap();
+        assert_eq!(again.skills, lock.skills);
+    }
+
+    #[test]
+    fn detects_an_added_skill() {
+        let have = Lockfile::new();
+        let mut want = Lockfile::new();
+        want.skills
+            .push(skill("nextjs", "abc", vec![file("SKILL.md", "x")]));
+        assert_eq!(have.diff(&want), vec![Drift::Added("nextjs".to_string())]);
+    }
+
+    #[test]
+    fn detects_a_removed_skill() {
+        let mut have = Lockfile::new();
+        have.skills
+            .push(skill("nextjs", "abc", vec![file("SKILL.md", "x")]));
+        assert_eq!(
+            have.diff(&Lockfile::new()),
+            vec![Drift::Removed("nextjs".to_string())]
+        );
+    }
+
+    #[test]
+    fn detects_content_change_at_the_same_name() {
+        let mut have = Lockfile::new();
+        have.skills.push(skill(
+            "nextjs",
+            "aaaaaaaaaaaa",
+            vec![file("SKILL.md", "old")],
+        ));
+        let mut want = Lockfile::new();
+        want.skills.push(skill(
+            "nextjs",
+            "bbbbbbbbbbbb",
+            vec![file("SKILL.md", "new")],
+        ));
+
+        let drift = have.diff(&want);
+        assert_eq!(drift.len(), 1);
+        assert!(matches!(drift[0], Drift::Changed { .. }));
+        assert!(drift[0].to_string().contains("nextjs"));
+    }
+
+    #[test]
+    fn an_identical_lock_reports_no_drift() {
+        let mut a = Lockfile::new();
+        a.skills
+            .push(skill("nextjs", "abc", vec![file("SKILL.md", "x")]));
+        let b = a.clone();
+        assert!(a.diff(&b).is_empty());
+    }
+
+    #[test]
+    fn rejects_a_lock_from_a_future_version() {
+        let toml = format!("version = {}\n", LOCK_VERSION + 1);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(LOCKFILE);
+        std::fs::write(&path, toml).unwrap();
+        let err = Lockfile::load(&path).unwrap_err().to_string();
+        assert!(err.contains("different version"), "{}", err);
+    }
+}

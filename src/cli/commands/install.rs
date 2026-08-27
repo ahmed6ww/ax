@@ -1,151 +1,142 @@
-//! `apm install` Command
+//! `axur install` — add a source to the manifest and sync.
 //!
-//! Installs an agent configuration into the target editor.
+//! Modelled on `npm install <pkg>`: the command records the dependency in
+//! `axur.toml` and then reconciles, rather than performing a one-off install
+//! that nothing remembers. That is what keeps the manifest the single
+//! description of what a project needs.
 
 use anyhow::{Context, Result};
-use colored::Colorize;
 
-use crate::core::agent::AgentConfig;
-use crate::core::registry::Registry;
-use crate::installers::{get_installer, Target};
-use crate::utils::{ui, validation};
+use crate::core::manifest::{Manifest, SkillSpec, MANIFEST_FILE};
+use crate::core::source::{GitHubSource, SourceClient, SourceKind};
+use crate::utils::{paths, ui};
 
-use super::super::TargetArg;
-
-/// Execute the install command
-pub async fn execute(agent_name: &str, target: TargetArg, global: bool) -> Result<()> {
-    let target: Target = target.into();
-
-    ui::print_header(&format!("Installing {}", agent_name));
-
-    // Step 1: Fetch agent from registry
-    let spinner = ui::create_spinner("Fetching agent configuration...");
-
-    let registry = Registry::new();
-    let agent: AgentConfig = registry
-        .fetch_agent(agent_name)
-        .await
-        .context(format!("Agent '{}' not found in registry", agent_name))?;
-
-    spinner.finish_with_message(format!("{} Found {} v{}", "✓".green(), agent.name, agent.version));
-
-    // Step 2: Validate required tools
-    println!("\n{} Checking dependencies...", "→".cyan());
-
-    let missing_tools = validation::check_agent_dependencies(&agent);
-    if !missing_tools.is_empty() {
-        println!();
-        for tool in &missing_tools {
-            println!(
-                "  {} {} is required but not found in PATH",
-                "⚠".yellow().bold(),
-                tool.as_str().bold()
-            );
-        }
-        println!();
-        println!(
-            "  {} Some MCP tools may not work without these dependencies.",
-            "!".yellow()
-        );
-        println!(
-            "  {} Install missing tools and try again, or continue anyway.",
-            "→".cyan()
-        );
-        println!();
-    } else {
-        println!("  {} All dependencies satisfied", "✓".green());
+/// Split `owner/repo#path/inside/repo` into its parts.
+fn split_source(spec: &str) -> (&str, Option<&str>) {
+    match spec.split_once('#') {
+        Some((source, path)) if !path.trim().is_empty() => (source, Some(path.trim())),
+        _ => (spec, None),
     }
-
-    // Step 3: Get the appropriate installer
-    let installer = get_installer(target, global);
-
-    // Step 4: Install identity
-    let spinner = ui::create_spinner("Installing identity (system prompt)...");
-    installer.install_identity(&agent)?;
-    spinner.finish_with_message(format!("{} Identity installed", "✓".green()));
-
-    // Step 5: Install skills
-    if !agent.skills.is_empty() {
-        let spinner = ui::create_spinner(&format!("Installing {} skill(s)...", agent.skills.len()));
-        installer.install_skills(&agent)?;
-        spinner.finish_with_message(format!(
-            "{} {} skill(s) installed",
-            "✓".green(),
-            agent.skills.len()
-        ));
-    }
-
-    // Step 6: Install MCP tools
-    if !agent.mcp.is_empty() {
-        // Clone and mutate agent to add actual API keys
-        let mut agent_with_keys = agent.clone();
-        
-        // Check for MCPs that require API keys and prompt user
-        for tool in &mut agent_with_keys.mcp {
-            if let Some(url) = &tool.setup_url {
-                println!();
-                println!("  {} MCP '{}' requires an API key", "ℹ".blue().bold(), tool.name.bold());
-                println!("  {} Get your API key here: {}", "→".cyan(), url.underline().blue());
-                println!();
-                print!("  {} Paste your API key (or press Enter to skip): ", "?".yellow().bold());
-                
-                // Flush stdout to ensure prompt is shown
-                use std::io::Write;
-                std::io::stdout().flush().ok();
-                
-                // Read API key from user
-                let mut api_key = String::new();
-                if std::io::stdin().read_line(&mut api_key).is_ok() {
-                    let api_key = api_key.trim();
-                    if !api_key.is_empty() {
-                        // Replace placeholder with actual key in env
-                        for (_, value) in tool.env.iter_mut() {
-                            if value.starts_with("${") && value.ends_with("}") {
-                                *value = api_key.to_string();
-                            }
-                        }
-                        println!("  {} API key configured!", "✓".green());
-                    } else {
-                        println!("  {} Skipped - you can configure this later", "→".cyan());
-                    }
-                }
-            }
-        }
-
-        let spinner = ui::create_spinner(&format!("Configuring {} MCP tool(s)...", agent_with_keys.mcp.len()));
-        installer.install_tools(&agent_with_keys)?;
-        spinner.finish_with_message(format!(
-            "{} {} MCP tool(s) configured",
-            "✓".green(),
-            agent_with_keys.mcp.len()
-        ));
-    }
-
-    // Success message
-    println!();
-    ui::print_success(&format!(
-        "{} installed successfully to {}!",
-        agent.name,
-        target.display_name()
-    ));
-
-    // Print next steps
-    println!("\n  {} Next steps:", "→".cyan());
-    match target {
-        Target::Claude => {
-            println!("    1. Restart Claude Code to load the new agent");
-            println!("    2. The agent will be available in your conversations");
-        }
-        Target::Cursor => {
-            println!("    1. Restart Cursor to load the new rules");
-            println!("    2. The agent context will be available in Composer");
-        }
-        Target::Codex => {
-            println!("    1. Restart Codex to load the new agent");
-            println!("    2. The agent will be available in your conversations");
-        }
-    }
-
-    Ok(())
 }
 
+/// The name an entry installs under: the last path segment, else the repo.
+fn derive_name(source: &GitHubSource, path: Option<&str>) -> String {
+    path.and_then(|p| p.trim_matches('/').rsplit('/').next())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(&source.repo)
+        .to_string()
+}
+
+pub async fn execute(
+    spec: &str,
+    rev: Option<String>,
+    name_override: Option<String>,
+    assume_yes: bool,
+) -> Result<()> {
+    ui::intro(&format!("axur install {}", spec));
+
+    let (source_str, path) = split_source(spec);
+    let source = GitHubSource::parse(source_str)?;
+    let name = name_override.unwrap_or_else(|| derive_name(&source, path));
+
+    // The manifest is created on demand so `install` works in a fresh repo
+    // without a separate `init` step.
+    let project_root = paths::project_root()?;
+    let manifest_path =
+        Manifest::find(&project_root).unwrap_or_else(|| project_root.join(MANIFEST_FILE));
+    let mut manifest = if manifest_path.exists() {
+        Manifest::load(&manifest_path)?
+    } else {
+        Manifest::default()
+    };
+
+    let spinner = ui::Spinner::start(&format!("Resolving {}…", source.slug()));
+    let client = SourceClient::new()?;
+    let (commit, kind) = client
+        .probe(&source, path.unwrap_or(&name), rev.as_deref())
+        .await
+        .with_context(|| format!("Could not resolve {}", spec))?;
+    spinner.stop(&format!(
+        "{} {}  {}",
+        match kind {
+            SourceKind::Bundle => "bundle",
+            SourceKind::Skill => "skill",
+        },
+        ui::bold(&name),
+        ui::dim(&ui::short_sha(&commit))
+    ));
+
+    let entry = SkillSpec::Detailed {
+        source: source.slug(),
+        path: path.map(str::to_string),
+        rev: rev.clone(),
+    };
+
+    let table = match kind {
+        SourceKind::Bundle => &mut manifest.bundles,
+        SourceKind::Skill => &mut manifest.skills,
+    };
+    let replaced = table.insert(name.clone(), entry).is_some();
+
+    // Keep whatever was there so a failed reconcile does not leave the entry
+    // behind. A manifest that names something unusable is worse than no change.
+    let previous = if manifest_path.exists() {
+        Some(std::fs::read(&manifest_path)?)
+    } else {
+        None
+    };
+
+    manifest.save(&manifest_path)?;
+    ui::success(&format!(
+        "{} {} in {}",
+        if replaced { "Updated" } else { "Added" },
+        ui::bold(&name),
+        ui::accent(MANIFEST_FILE)
+    ));
+
+    // Reconcile so the entry is actually on disk and in the lockfile. The
+    // rail stays open: sync closes it.
+    match super::sync::reconcile(assume_yes).await {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            match previous {
+                Some(bytes) => std::fs::write(&manifest_path, bytes)?,
+                None => {
+                    std::fs::remove_file(&manifest_path).ok();
+                }
+            }
+            ui::info(&format!("{} left unchanged", ui::accent(MANIFEST_FILE)));
+            Err(err)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn splits_a_source_from_its_path() {
+        assert_eq!(
+            split_source("vercel-labs/skills#skills/find-skills"),
+            ("vercel-labs/skills", Some("skills/find-skills"))
+        );
+        assert_eq!(
+            split_source("ahmed6ww/ax-agents"),
+            ("ahmed6ww/ax-agents", None)
+        );
+        assert_eq!(split_source("owner/repo#"), ("owner/repo#", None));
+    }
+
+    #[test]
+    fn derives_the_name_from_the_last_segment() {
+        let source = GitHubSource::parse("vercel-labs/skills").unwrap();
+        assert_eq!(
+            derive_name(&source, Some("skills/find-skills")),
+            "find-skills"
+        );
+        assert_eq!(derive_name(&source, Some("skills/web-perf/")), "web-perf");
+        // With no path, the repository name is the sensible default.
+        assert_eq!(derive_name(&source, None), "skills");
+    }
+}

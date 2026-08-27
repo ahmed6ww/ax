@@ -1,0 +1,20 @@
+{
+  "name": "@axur/darwin-x64",
+  "version": "0.0.0",
+  "description": "macOS Intel binary for axur",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agenzalabs/ax.git"
+  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "files": [
+    "bin"
+  ],
+  "preferUnplugged": true
+}

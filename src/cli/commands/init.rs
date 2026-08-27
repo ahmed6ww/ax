@@ -1,116 +1,135 @@
-//! `apm init` Command
+//! `axur init` — detect installed agents and scaffold the project manifest.
 //!
-//! Detects installed editors and creates APM configuration.
+//! Interactive on a terminal: detected agents are pre-selected, the scope is a
+//! choice, and the manifest is written from what you pick. Piped or in CI it
+//! takes the detected agents at project scope without prompting, so the command
+//! stays scriptable.
 
 use anyhow::Result;
-use colored::Colorize;
-use std::path::PathBuf;
 
-use crate::core::config::ApmConfig;
-use crate::utils::paths;
+use crate::core::config::Config;
+use crate::core::manifest::{Manifest, Targets, MANIFEST_FILE};
+use crate::installers::Target;
+use crate::utils::paths::{self, Scope};
 use crate::utils::ui;
 
-/// Execute the init command
+fn detect(target: Target) -> bool {
+    match target {
+        Target::Claude => paths::claude_detected(),
+        Target::Codex => paths::codex_detected(),
+    }
+}
+
+fn user_skills_dir(target: Target) -> String {
+    let path = match target {
+        Target::Claude => paths::claude_skills_dir(Scope::User),
+        Target::Codex => paths::codex_skills_dir(Scope::User),
+    };
+    path.map(|p| p.display().to_string())
+        .unwrap_or_else(|_| "unresolved".to_string())
+}
+
 pub async fn execute() -> Result<()> {
-    ui::print_header("AX Initialization");
+    ui::intro("axur init");
 
-    // Detect installed editors
-    println!("{} Detecting installed editors...\n", "→".cyan());
+    let detected: Vec<Target> = Target::all().into_iter().filter(|t| detect(*t)).collect();
 
-    let claude_installed = detect_claude();
-    let cursor_installed = detect_cursor();
-    let vscode_installed = detect_vscode();
+    let report = Target::all()
+        .iter()
+        .map(|t| {
+            if detected.contains(t) {
+                format!(
+                    "{} {}  {}",
+                    ui::good("✓"),
+                    ui::bold(t.display_name()),
+                    ui::dim(&user_skills_dir(*t))
+                )
+            } else {
+                ui::dim(&format!("· {}  not found", t.display_name()))
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    ui::step(&format!("Detected agents\n{}", report));
 
-    // Print detection results
-    print_editor_status("Claude Code", claude_installed, paths::claude_config_dir());
-    print_editor_status("Cursor", cursor_installed, paths::cursor_config_dir());
-    print_editor_status("VS Code", vscode_installed, None);
+    if detected.is_empty() {
+        ui::warning("No supported agent found on this machine");
+        ui::note(
+            "axur targets Claude Code and Codex",
+            "Install one, then run axur init again.\nYou can still create a manifest now and sync later.",
+        );
+    }
 
-    println!();
-
-    // Determine default target
-    let default_target = if claude_installed {
-        "claude"
-    } else if cursor_installed {
-        "cursor"
+    // Choose targets and scope. Non-interactive runs take the detected set.
+    let (chosen, scope) = if ui::is_rich() {
+        let selected = ui::select_targets(&detected)?;
+        if selected.is_empty() {
+            ui::outro_cancel("No targets selected — nothing written");
+            return Ok(());
+        }
+        let scope = ui::select_scope()?;
+        (selected, scope)
     } else {
-        "claude" // Default to claude even if not detected
+        let fallback = if detected.is_empty() {
+            Target::all().to_vec()
+        } else {
+            detected.clone()
+        };
+        (fallback, Scope::Project)
     };
 
-    // Create config
-    let config = ApmConfig::new(default_target.to_string());
-    let config_path = paths::ax_config_path()?;
+    // The project manifest is the file a team commits, so never overwrite one.
+    let manifest_path = paths::project_root()?.join(MANIFEST_FILE);
+    if manifest_path.exists() {
+        ui::info(&format!(
+            "{} already exists — left untouched",
+            ui::accent(MANIFEST_FILE)
+        ));
+    } else {
+        let manifest = Manifest {
+            targets: Targets {
+                agents: chosen.iter().map(|t| t.slug().to_string()).collect(),
+                scope: scope.display_name().to_string(),
+            },
+            ..Manifest::starter(&chosen)
+        };
+        manifest.save(&manifest_path)?;
+        ui::success(&format!("Created {}", ui::accent(MANIFEST_FILE)));
+    }
 
-    // Ensure config directory exists
+    // Preserve an existing configuration; re-running init previously reset a
+    // customized registry URL back to the default.
+    let config_path = paths::axur_config_path()?;
+    let mut config = Config::load_or_default()?;
+    if let Some(first) = chosen.first() {
+        config.default_target = first.slug().to_string();
+    }
     if let Some(parent) = config_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-
-    // Write config
     config.save(&config_path)?;
 
-    println!(
-        "{} Created configuration at {}",
-        "✓".green().bold(),
-        config_path.display().to_string().cyan()
-    );
-    println!(
-        "{} Default target set to: {}",
-        "✓".green().bold(),
-        default_target.cyan().bold()
+    ui::note(
+        "Next",
+        &format!(
+            "1. Add skills under [skills] in {}\n\
+             2. Run axur sync to install them\n\
+             3. Commit {} and axur.lock so your team resolves the same commits",
+            MANIFEST_FILE, MANIFEST_FILE
+        ),
     );
 
-    println!();
-    ui::print_success("AX initialized successfully!");
-    println!(
-        "\n  Run {} to see available agents.",
-        "ax list".cyan().bold()
-    );
+    ui::outro(&format!(
+        "Ready {} {} {} {} scope",
+        ui::dim("·"),
+        chosen
+            .iter()
+            .map(|t| t.display_name())
+            .collect::<Vec<_>>()
+            .join(", "),
+        ui::dim("·"),
+        scope.display_name()
+    ));
 
     Ok(())
 }
-
-fn detect_claude() -> bool {
-    paths::claude_config_dir()
-        .map(|path| path.exists())
-        .unwrap_or(false)
-}
-
-fn detect_cursor() -> bool {
-    paths::cursor_config_dir()
-        .map(|path| path.exists())
-        .unwrap_or_else(|| {
-            // Also check for .cursor in current directory
-            PathBuf::from(".cursor").exists()
-        })
-}
-
-fn detect_vscode() -> bool {
-    // Check if code command exists
-    which::which("code").is_ok()
-}
-
-fn print_editor_status(name: &str, installed: bool, path: Option<PathBuf>) {
-    let status = if installed {
-        "✓".green().bold()
-    } else {
-        "✗".red().bold()
-    };
-
-    let status_text = if installed {
-        "detected".green()
-    } else {
-        "not found".dimmed()
-    };
-
-    print!("  {} {} - {}", status, name.bold(), status_text);
-
-    if installed {
-        if let Some(p) = path {
-            print!(" ({})", p.display().to_string().dimmed());
-        }
-    }
-
-    println!();
-}
-

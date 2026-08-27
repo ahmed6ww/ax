@@ -4,7 +4,7 @@ description: How to release a new version of AX
 
 # Release Workflow for AX
 
-This workflow guides you through releasing a new version of AX to GitHub and making it available via the install script.
+This workflow guides you through releasing a new version of axur to GitHub and making it available via the install script.
 
 ## Prerequisites
 
@@ -19,14 +19,14 @@ This workflow guides you through releasing a new version of AX to GitHub and mak
 Edit `Cargo.toml` and update the version number:
 ```toml
 [package]
-version = "1.5.0"  # Update this
+version = "0.1.0"  # Update this
 ```
 
 ### 2. Commit the version change
 
 ```bash
 git add Cargo.toml Cargo.lock
-git commit -m "chore: bump version to v1.5.0"
+git commit -m "chore: bump version to v0.1.0"
 git push origin main
 ```
 
@@ -34,12 +34,12 @@ git push origin main
 
 // turbo
 ```bash
-git tag v1.5.0
+git tag v0.1.0
 ```
 
 // turbo
 ```bash
-git push origin v1.5.0
+git push origin v0.1.0
 ```
 
 ### 4. Monitor the GitHub Actions workflow
@@ -49,17 +49,17 @@ The release workflow will automatically:
 - Create a GitHub release
 - Upload all binaries to the release
 
-Check the progress at: https://github.com/ahmed6ww/ax/actions
+Check the progress at: https://github.com/agenzalabs/ax/actions
 
 ### 5. Verify the release
 
 Once the workflow completes:
-- Visit https://github.com/ahmed6ww/ax/releases
-- Verify v1.5.0 is published with all binaries
+- Visit https://github.com/agenzalabs/ax/releases
+- Verify v0.1.0 is published with all binaries
 - Test the install script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ahmed6ww/ax/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/agenzalabs/ax/main/install.sh | bash
 ```
 
 ## Quick Release Script
@@ -67,7 +67,7 @@ curl -fsSL https://raw.githubusercontent.com/ahmed6ww/ax/main/install.sh | bash
 Alternatively, use the automated release script:
 
 ```bash
-./scripts/release.sh 1.5.0
+./scripts/release.sh 0.1.0
 ```
 
 This will handle steps 1-3 automatically.
@@ -81,7 +81,7 @@ This will handle steps 1-3 automatically.
 
 ### Install script downloads old version
 - Ensure the tag was pushed: `git ls-remote --tags origin`
-- Check GitHub API: `curl -s https://api.github.com/repos/ahmed6ww/ax/releases/latest`
+- Check GitHub API: `curl -s https://api.github.com/repos/agenzalabs/ax/releases/latest`
 - Clear any CDN cache if using one
 
 ### Binary not found

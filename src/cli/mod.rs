@@ -2,18 +2,20 @@
 
 pub mod commands;
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 
-use crate::installers::Target;
-
-/// AX (Agent Package Manager) - The npm of the Agentic AI era
+/// axur - a package manager for AI coding-agent setups.
 ///
-/// Install AI agent configurations into Claude Code, Cursor, and more.
+/// Declare what a project's agent needs in `axur.toml`, pin it in
+/// `axur.lock`, and every machine that syncs gets the same setup.
 #[derive(Parser, Debug)]
-#[command(name = "ax")]
+#[command(name = "axur")]
+// Without this, clap takes the usage line from argv[0] and Windows users are
+// told to run "axur.exe".
+#[command(bin_name = "axur")]
 #[command(author = "ahmed6ww")]
-#[command(version = "1.3.0")]
-#[command(about = "Write Once, Run on Claude, Cursor, or Codex", long_about = None)]
+#[command(version = env!("CARGO_PKG_VERSION"))]
+#[command(about = "Keep your team running the same agent setup on Claude Code and Codex", long_about = None)]
 #[command(propagate_version = true)]
 pub struct Cli {
     #[command(subcommand)]
@@ -22,40 +24,66 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Initialize AX and detect installed editors
+    /// Initialize axur and detect installed editors
     Init,
 
-    /// List available agents from the registry
+    /// Show what this project has installed
     List,
 
-    /// Install an agent configuration
-    Install {
-        /// Name of the agent to install
-        agent: String,
-
-        /// Target editor (claude, cursor)
-        #[arg(short, long, value_enum, default_value = "claude")]
-        target: TargetArg,
-
-        /// Install globally (applies to all projects)
-        #[arg(short, long, default_value = "false")]
-        global: bool,
+    /// Inspect or clear the download cache
+    Cache {
+        /// Delete every cached entry
+        #[arg(long, default_value = "false")]
+        clear: bool,
     },
-}
 
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum TargetArg {
-    Claude,
-    Cursor,
-    Codex,
-}
+    /// Show what is authorised to run on this machine
+    Audit {
+        /// Withdraw approval for a name, so axur asks again
+        #[arg(long, value_name = "NAME")]
+        revoke: Option<String>,
+    },
 
-impl From<TargetArg> for Target {
-    fn from(arg: TargetArg) -> Self {
-        match arg {
-            TargetArg::Claude => Target::Claude,
-            TargetArg::Cursor => Target::Cursor,
-            TargetArg::Codex => Target::Codex,
-        }
-    }
+    /// Add a skill or bundle to axur.toml and sync
+    Install {
+        /// Source as owner/repo, optionally with #path/inside/repo
+        source: String,
+
+        /// Branch, tag or commit to pin. Defaults to the default branch.
+        #[arg(long)]
+        rev: Option<String>,
+
+        /// Name to install under. Defaults to the last path segment.
+        #[arg(long)]
+        name: Option<String>,
+
+        /// Approve anything that will run on your machine without prompting
+        #[arg(short = 'y', long, default_value = "false")]
+        yes: bool,
+    },
+
+    /// Install everything axur.toml declares, for the whole team
+    Sync {
+        /// Verify only: write nothing and exit non-zero if the tree has drifted
+        #[arg(long, default_value = "false")]
+        check: bool,
+
+        /// Re-resolve every source to its latest commit and rewrite the lockfile
+        #[arg(long, default_value = "false")]
+        update: bool,
+
+        /// Approve anything that will run on your machine without prompting
+        #[arg(short = 'y', long, default_value = "false")]
+        yes: bool,
+
+        /// Use only cached content; fail rather than reach the network
+        #[arg(long, default_value = "false")]
+        offline: bool,
+    },
+
+    /// Remove a skill or bundle from axur.toml and sync
+    Uninstall {
+        /// Name it was installed under
+        agent: String,
+    },
 }

@@ -3,14 +3,37 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
   contents: write
+  # Required to attest that these binaries were built by this workflow from
+  # this commit. Without it a release is a set of anonymous files.
+  id-token: write
+  attestations: write
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
+  # A tag must not ship code that has never been verified. Previous releases
+  # ran no tests at all.
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --all-targets
+
   build:
-    name: Build ${{ matrix.target }}
+    name: Build ${{ matrix.artifact }}
+    needs: verify
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -18,83 +41,189 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact: ax-linux-x64
+            artifact: axur-linux-x64
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            artifact: ax-linux-arm64
+            artifact: axur-linux-arm64
             cross: true
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact: ax-macos-x64
+            artifact: axur-macos-x64
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact: ax-macos-arm64
+            artifact: axur-macos-arm64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact: ax-windows-x64.exe
+            artifact: axur-windows-x64.exe
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross (for ARM Linux)
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      # Pinned. This previously installed from the tip of cross's default
+      # branch, making every release depend on whatever landed there that day.
+      - name: Install cross
         if: matrix.cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross@0.2.5
 
-      - name: Build (cross)
-        if: matrix.cross
-        run: cross build --release --target ${{ matrix.target }}
-
-      - name: Build (native)
-        if: "!matrix.cross"
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Prepare artifact (Unix)
-        if: runner.os != 'Windows'
+      - name: Build
         run: |
-          cp target/${{ matrix.target }}/release/ax ${{ matrix.artifact }}
-          chmod +x ${{ matrix.artifact }}
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            cross build --release --locked --target ${{ matrix.target }}
+          else
+            cargo build --release --locked --target ${{ matrix.target }}
+          fi
+        shell: bash
 
-      - name: Prepare artifact (Windows)
-        if: runner.os == 'Windows'
-        run: cp target/${{ matrix.target }}/release/ax.exe ${{ matrix.artifact }}
+      - name: Stage artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp "target/${{ matrix.target }}/release/axur.exe" "${{ matrix.artifact }}"
+          else
+            cp "target/${{ matrix.target }}/release/axur" "${{ matrix.artifact }}"
+            chmod +x "${{ matrix.artifact }}"
+          fi
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v sha256sum >/dev/null; then
+            sha256sum "${{ matrix.artifact }}" > "${{ matrix.artifact }}.sha256"
+          else
+            shasum -a 256 "${{ matrix.artifact }}" > "${{ matrix.artifact }}.sha256"
+          fi
+          cat "${{ matrix.artifact }}.sha256"
+
+      - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}
+          path: |
+            ${{ matrix.artifact }}
+            ${{ matrix.artifact }}.sha256
+          if-no-files-found: error
 
   release:
-    name: Create Release
+    name: Publish release
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts
+          merge-multiple: true
 
-      - name: Display structure
-        run: ls -R artifacts
+      # One file the installers can fetch and verify against, rather than five
+      # separate sidecars.
+      - name: Collect SHA256SUMS
+        working-directory: artifacts
+        run: |
+          set -euo pipefail
+          cat ./*.sha256 | sort -k2 > SHA256SUMS
+          rm -f ./*.sha256
+          echo "--- SHA256SUMS ---"
+          cat SHA256SUMS
+          sha256sum --check SHA256SUMS
 
-      - name: Create Release
+      - name: Attest provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: artifacts/axur-*
+
+      - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/ax-linux-x64/ax-linux-x64
-            artifacts/ax-linux-arm64/ax-linux-arm64
-            artifacts/ax-macos-x64/ax-macos-x64
-            artifacts/ax-macos-arm64/ax-macos-arm64
-            artifacts/ax-windows-x64.exe/ax-windows-x64.exe
+            artifacts/axur-*
+            artifacts/SHA256SUMS
           generate_release_notes: true
+          fail_on_unmatched_files: true
+
+  # npm and crates.io both publish only after the GitHub release exists, so a
+  # failed build never leaves a version live on a registry that cannot be
+  # unpublished.
+  npm:
+    name: Publish to npm
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Lets npm attach provenance, the same claim the GitHub release carries.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Stamp version and place binaries
+        run: node scripts/npm-prepare.mjs "${{ github.ref_name }}" artifacts
+
+      # A prerelease tag must not become what `npm install axur` gives people.
+      - name: Choose the dist-tag
+        id: tag
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          if [[ "$version" == *-* ]]; then
+            echo "dist=next" >> "$GITHUB_OUTPUT"
+          else
+            echo "dist=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Platform packages first: the shim pins them at an exact version, so
+      # publishing it first would leave `npm install axur` briefly broken.
+      - name: Publish platform packages
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          for dir in npm/platforms/*/; do
+            echo "--- $dir"
+            npm publish "$dir" --access public --provenance --tag "${{ steps.tag.outputs.dist }}"
+          done
+
+      - name: Publish the launcher
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish npm/axur --access public --provenance --tag "${{ steps.tag.outputs.dist }}"
+
+  crates:
+    name: Publish to crates.io
+    needs: [release, npm]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      # Last, and deliberately so: a crates.io release cannot be withdrawn,
+      # only yanked.
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --locked

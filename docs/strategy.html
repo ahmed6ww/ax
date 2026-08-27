@@ -1,0 +1,390 @@
+<title>The Lockfile Wedge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+  :root {
+    --ground:#FAF8F4; --surface:#FFFFFF; --sunk:#F2EEE7;
+    --ink:#1A1714; --ink-2:#4A423A; --muted:#7A7063;
+    --rule:#E4DDD2; --rule-2:#D2C8B9;
+    --accent:#C2571E; --accent-q:#F5E4D8;
+    --crit:#8E1230; --crit-bg:#F7E3E7;
+    --ok:#2C6B4F; --ok-bg:#E4EFE8;
+    --cool:#2E5C86; --cool-bg:#E3ECF4;
+    --shadow:0 1px 2px rgba(26,23,20,.05), 0 8px 24px -16px rgba(26,23,20,.18);
+    --f-display:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+    --f-body:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#141210; --surface:#1D1A16; --sunk:#24201A;
+      --ink:#EFEAE2; --ink-2:#C6BDB0; --muted:#968C7E;
+      --rule:#2E281F; --rule-2:#423A2E;
+      --accent:#EE8043; --accent-q:#38271C;
+      --crit:#FF7686; --crit-bg:#351A21;
+      --ok:#6FBE93; --ok-bg:#16291F;
+      --cool:#8FB8E0; --cool-bg:#172533;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#141210; --surface:#1D1A16; --sunk:#24201A;
+    --ink:#EFEAE2; --ink-2:#C6BDB0; --muted:#968C7E;
+    --rule:#2E281F; --rule-2:#423A2E;
+    --accent:#EE8043; --accent-q:#38271C;
+    --crit:#FF7686; --crit-bg:#351A21;
+    --ok:#6FBE93; --ok-bg:#16291F;
+    --cool:#8FB8E0; --cool-bg:#172533;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing:border-box; }
+  body {
+    background:var(--ground); color:var(--ink);
+    font-family:var(--f-body); font-size:16px; line-height:1.62; margin:0;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:1080px; margin:0 auto; padding:0 28px 120px; }
+
+  .masthead { border-bottom:2px solid var(--ink); padding:56px 0 24px; }
+  .mark {
+    font-family:var(--f-mono); font-weight:600; font-size:13px;
+    letter-spacing:.18em; text-transform:uppercase; color:var(--accent);
+    display:block; margin-bottom:16px;
+  }
+  h1 {
+    font-family:var(--f-display); font-weight:600;
+    font-size:clamp(36px,6vw,60px); line-height:1.02; letter-spacing:-.018em;
+    margin:0; text-wrap:balance; max-width:16ch;
+  }
+  .standfirst {
+    font-size:19px; color:var(--ink-2); max-width:60ch; margin:22px 0 0;
+  }
+  .standfirst b { color:var(--ink); font-weight:600; }
+
+  section { padding-top:66px; }
+  .eyebrow {
+    font-family:var(--f-mono); font-size:11.5px; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--accent); margin:0 0 12px;
+    display:flex; align-items:center; gap:12px;
+  }
+  .eyebrow::after { content:""; flex:1; height:1px; background:var(--rule); }
+  h2 {
+    font-family:var(--f-display); font-weight:600;
+    font-size:clamp(26px,3.4vw,35px); line-height:1.14; letter-spacing:-.012em;
+    margin:0 0 16px; text-wrap:balance; max-width:24ch;
+  }
+  h3 {
+    font-family:var(--f-display); font-weight:600; font-size:20px;
+    margin:38px 0 12px; letter-spacing:-.005em;
+  }
+  p { margin:0 0 16px; max-width:68ch; }
+  .lede { font-size:17.5px; color:var(--ink-2); max-width:64ch; }
+  strong, b { font-weight:600; }
+  code {
+    font-family:var(--f-mono); font-size:.875em; background:var(--sunk);
+    border:1px solid var(--rule); border-radius:3px; padding:1px 5px; color:var(--ink);
+  }
+  a { color:var(--accent); text-underline-offset:3px; }
+  a:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:2px; }
+
+  /* fact panel */
+  .factpanel {
+    background:var(--surface); border:1px solid var(--rule); border-radius:5px;
+    padding:6px 24px 20px; margin:26px 0; box-shadow:var(--shadow);
+  }
+  .factrow {
+    display:grid; grid-template-columns:190px 1fr; gap:20px;
+    padding:13px 0; border-bottom:1px solid var(--rule); align-items:baseline;
+  }
+  .factrow:last-child { border-bottom:0; }
+  .fkey {
+    font-family:var(--f-mono); font-size:11.5px; letter-spacing:.11em;
+    text-transform:uppercase; color:var(--muted); font-weight:600;
+  }
+  .fval { font-size:15px; color:var(--ink-2); }
+  .fval b { color:var(--ink); }
+  .no { color:var(--crit); font-weight:600; }
+
+  /* matrix */
+  .tablewrap { overflow-x:auto; margin:26px 0; }
+  table { border-collapse:collapse; width:100%; min-width:700px; font-size:14.5px; }
+  th, td { text-align:left; padding:12px 18px 12px 0; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th {
+    font-family:var(--f-mono); font-size:11px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--muted); font-weight:600;
+    border-bottom:1px solid var(--ink);
+  }
+  td.surface { font-weight:600; }
+  td.mono { font-family:var(--f-mono); font-size:12.5px; color:var(--ink-2); }
+  .yes { color:var(--ok); font-weight:600; }
+  .nope { color:var(--crit); font-weight:600; }
+  .dash { color:var(--muted); }
+
+  /* pull quote */
+  .position {
+    border-left:4px solid var(--accent); background:var(--accent-q);
+    padding:26px 30px; margin:32px 0;
+  }
+  .position p {
+    font-family:var(--f-display); font-size:clamp(20px,2.6vw,26px);
+    line-height:1.35; margin:0; color:var(--ink); max-width:30ch; text-wrap:balance;
+  }
+  .position .sub {
+    font-family:var(--f-body); font-size:15px; color:var(--ink-2);
+    margin-top:14px; max-width:56ch; line-height:1.6;
+  }
+
+  /* ship list */
+  .ship { border-top:1px solid var(--rule); margin-top:28px; }
+  .item {
+    display:grid; grid-template-columns:58px 1fr; gap:0 24px;
+    border-bottom:1px solid var(--rule); padding:24px 0;
+  }
+  .inum {
+    font-family:var(--f-mono); font-size:26px; font-weight:600;
+    color:var(--accent); line-height:1; font-variant-numeric:tabular-nums;
+  }
+  .item h4 {
+    font-family:var(--f-body); font-weight:600; font-size:17.5px;
+    margin:0 0 8px; line-height:1.3;
+  }
+  .item p { font-size:15px; color:var(--ink-2); margin:0 0 10px; max-width:70ch; }
+  .item p:last-child { margin-bottom:0; }
+  .tag {
+    display:inline-block; font-family:var(--f-mono); font-size:10px;
+    font-weight:600; letter-spacing:.11em; text-transform:uppercase;
+    padding:3px 8px; border-radius:2px; margin-left:8px; vertical-align:2px;
+  }
+  .tag.moat { background:var(--ok-bg); color:var(--ok); }
+  .tag.gate { background:var(--crit-bg); color:var(--crit); }
+  .tag.def  { background:var(--cool-bg); color:var(--cool); }
+
+  pre {
+    font-family:var(--f-mono); font-size:13px; line-height:1.6;
+    background:var(--sunk); border:1px solid var(--rule); border-radius:4px;
+    padding:18px 20px; overflow-x:auto; margin:18px 0; color:var(--ink-2);
+  }
+  pre b { color:var(--ink); font-weight:500; }
+  pre i { color:var(--muted); font-style:normal; }
+  pre em { color:var(--accent); font-style:normal; }
+
+  ul.tight { margin:0 0 16px; padding-left:20px; max-width:70ch; }
+  ul.tight li { margin-bottom:9px; color:var(--ink-2); }
+  ul.tight li b { color:var(--ink); }
+
+  .warn {
+    border-left:4px solid var(--crit); background:var(--crit-bg);
+    padding:16px 20px; margin:24px 0; font-size:15px; color:var(--ink-2); max-width:72ch;
+  }
+  .warn b { color:var(--ink); }
+
+  footer {
+    margin-top:72px; padding-top:22px; border-top:1px solid var(--rule);
+    font-family:var(--f-mono); font-size:12px; color:var(--muted); line-height:1.9;
+  }
+  footer a { color:var(--muted); }
+
+  @media (max-width:720px) {
+    .factrow { grid-template-columns:1fr; gap:4px; }
+    .item { grid-template-columns:1fr; gap:8px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation:none!important; transition:none!important; } }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <span class="mark">ax · positioning &amp; roadmap · aug 2026</span>
+    <h1>The lockfile wedge</h1>
+    <p class="standfirst">You cannot beat skills.sh at finding skills, and you should stop trying. <b>Beat it at guaranteeing a team is running the same ones.</b> Going vertical on Claude Code and Codex is what makes that possible — and it is the one thing a 76-agent tool structurally cannot copy.</p>
+  </header>
+
+  <section>
+    <p class="eyebrow">The competitor, precisely</p>
+    <h2>What Vercel actually shipped</h2>
+    <p class="lede">Announced 20 January 2026 — seven months ago. Two pieces: a CLI (<code>npx skills</code>, open source at <code>vercel-labs/skills</code>, MIT) and a directory plus leaderboard at skills.sh.</p>
+
+    <div class="factpanel">
+      <div class="factrow"><span class="fkey">Distribution</span><span class="fval"><b><code>npx skills add owner/repo</code></b> — zero install, npm-native. No binary to download.</span></div>
+      <div class="factrow"><span class="fkey">Agent coverage</span><span class="fval"><b>76 agents</b> — Claude Code, Codex, Cursor, Copilot, Windsurf, Gemini, Cline, and 69 more.</span></div>
+      <div class="factrow"><span class="fkey">Sources</span><span class="fval">Git-native: GitHub shorthand, GitLab, any git URL, local paths, direct download URLs. <b>There is no central package registry</b> — skills.sh is a directory and leaderboard over git repos.</span></div>
+      <div class="factrow"><span class="fkey">Install model</span><span class="fval">Symlink by default — one canonical copy, referenced from each agent. <code>--copy</code> when symlinks aren't available. Project or global scope.</span></div>
+      <div class="factrow"><span class="fkey">Commands</span><span class="fval"><code>add · use · list · find · remove · update · init</code></span></div>
+      <div class="factrow"><span class="fkey">Versioning</span><span class="fval"><span class="no">None.</span> No semver, no version pinning. <code>update</code> fetches whatever is at the source HEAD.</span></div>
+      <div class="factrow"><span class="fkey">Lockfile</span><span class="fval"><b>A per-machine install ledger</b> at <code>~/.agents/.skill-lock.json</code> (schema v3), recording <code>source</code>, <code>sourceUrl</code>, <code>skillPath</code>, a <code>skillFolderHash</code> content fingerprint, and install/update timestamps. <span class="no">It carries no version, ref, tag or commit field</span> — so it records what you happen to have, and cannot pin what you should get. It is user-global, not committed with a repo.</span></div>
+      <div class="factrow"><span class="fkey">Integrity</span><span class="fval">The folder hash detects local drift. <span class="no">No signature, no provenance, and nothing verified against the source</span> — installing from arbitrary git URLs.</span></div>
+      <div class="factrow"><span class="fkey">MCP servers</span><span class="fval"><span class="no">None.</span> Not supported at all.</span></div>
+      <div class="factrow"><span class="fkey">Team config</span><span class="fval"><span class="no">None.</span> No project manifest, no dependency resolution.</span></div>
+      <div class="factrow"><span class="fkey">Telemetry</span><span class="fval">On by default; opt out via <code>DO_NOT_TRACK</code>.</span></div>
+    </div>
+
+    <p>The field is more crowded than skills.sh alone. <code>agentskill.sh</code> ships <code>ags</code> with search, install, update and remove and claims a six-figure skill count. Anthropic ships plugins and marketplaces natively inside Claude Code. Three groups are already racing for the same catalog.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">The honest part</p>
+    <h2>The catalog race is over. You lost it.</h2>
+    <p class="lede">Vercel has npm-scale distribution, a seven-month head start, 146 first-party skills, and a leaderboard that compounds. Do not build a directory. Do not build a leaderboard. Do not try to out-publish them.</p>
+    <p>But look carefully at that fact table. No version pinning. No project manifest. No MCP. Its lockfile is a per-machine ledger with a content fingerprint: it answers <em>what do I have on this laptop</em>, never <em>what should this repository require</em>. You cannot commit it, a teammate cannot reproduce from it, and with no ref recorded anywhere, <code>skills update</code> still pulls whatever is at the source's HEAD. Those are not oversights — <b>they are the price of supporting 76 agents.</b> A tool that must work everywhere can only install the lowest common denominator, and the lowest common denominator across 76 agents is a markdown file copied into a folder.</p>
+    <p>Every tool in this space today is optimized for one developer trying one skill once. Not one of them is built for a team that needs its agent environment to be identical across machines, reviewable in a pull request, and safe to run. That is an entire product category sitting empty, and it is empty for a structural reason your competitors cannot design their way out of.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">Why vertical wins</p>
+    <h2>Two targets buy you surfaces the others can't touch</h2>
+    <p class="lede">Dropping Cursor is not a retreat. Cursor was the only target using a foreign format — <code>.mdc</code> rules. Claude Code and Codex both speak the same Agent Skills standard, so the &ldquo;transpiler&rdquo; framing dies and is replaced by something more valuable: <b>ax stops translating files and starts provisioning environments.</b></p>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Surface</th><th>Claude Code</th><th>Codex</th><th>skills.sh</th><th>ax could</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="surface">Skills</td><td class="mono">~/.claude/skills/<br>.claude/skills/</td><td class="mono">~/.agents/skills/<br>.agents/skills/</td><td class="yes">yes — the only thing</td><td class="yes">yes</td></tr>
+          <tr><td class="surface">Subagents</td><td class="mono">~/.claude/agents/*.md</td><td class="dash">—</td><td class="nope">no</td><td class="yes">yes</td></tr>
+          <tr><td class="surface">Slash commands</td><td class="mono">merged into skills</td><td class="dash">—</td><td class="nope">no</td><td class="yes">yes</td></tr>
+          <tr><td class="surface">Hooks</td><td class="mono">settings.json</td><td class="dash">—</td><td class="nope">no</td><td class="yes">yes</td></tr>
+          <tr><td class="surface">MCP servers</td><td class="mono">.mcp.json / settings</td><td class="mono">~/.codex/config.toml</td><td class="nope">none at all</td><td class="yes">already ships</td></tr>
+          <tr><td class="surface">Tool permissions</td><td class="mono">allowed-tools, settings</td><td class="dash">—</td><td class="dash">passthrough only</td><td class="yes">yes</td></tr>
+          <tr><td class="surface">Plugin bundle</td><td class="mono">.claude-plugin/plugin.json</td><td class="dash">—</td><td class="nope">no</td><td class="yes">yes</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Two things in that table matter more than the rest. First: <b>ax already does MCP and skills.sh does not do it at all.</b> That is a beachhead you own today and have never marketed. Second: Claude Code natively loads a skill folder containing <code>.claude-plugin/plugin.json</code> as a plugin that <b>bundles agents, hooks and MCP servers together</b>. There is a supported, first-party mechanism for shipping a whole environment as one unit — and it is only reachable if you are vertical enough to target it.</p>
+
+    <div class="warn">
+      <b>Before any of this: ax does not currently work on either target.</b> Claude Code reads <code>~/.claude/skills/</code>, but ax writes to the Claude <em>Desktop</em> directory on macOS and Windows. Codex reads <code>~/.agents/skills/</code> and <code>.agents/skills/</code>, but ax writes to <code>~/.codex/skills/</code>, which Codex never scans. Installs report success and land where nothing reads them. Fixing the paths is item&nbsp;0 and it gates the entire strategy — see PATH-01 and PATH-02 in the audit register.
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Position</p>
+    <h2>How to say it in one line</h2>
+    <div class="position">
+      <p>skills.sh helps you find a skill. ax makes sure your whole team is running the same ones.</p>
+      <p class="sub">Verified, pinned, reproducible — across Claude Code and Codex. If you prefer the analogy: skills.sh is <code>curl | sh</code> for agent skills; ax is <code>package-lock.json</code> for agent environments.</p>
+    </div>
+    <p>This ecosystem is seven months old. It is at precisely the stage npm was at before lockfiles — everyone installing from HEAD, nobody able to reproduce a build, and no one yet embarrassed by it. Someone is going to build the reproducibility layer. Being second to the catalog and first to reproducibility is a far better position than the reverse, because catalogs are winner-take-all and infrastructure is sticky.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">The build</p>
+    <h2>Six things, in this order</h2>
+
+    <div class="ship">
+
+      <div class="item">
+        <div class="inum">0</div>
+        <div>
+          <h4>Make it actually work<span class="tag gate">Gates everything</span></h4>
+          <p>Correct the install paths for both targets, add project scope, and write an integration test that asserts a file lands where the agent's own documentation says it looks. Until this ships, every other feature is theoretical. This is days of work, not weeks.</p>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="inum">1</div>
+        <div>
+          <h4><code>axur.toml</code> + <code>axur.lock</code> + <code>axur sync</code><span class="tag moat">The moat</span></h4>
+          <p>Commit a manifest to the repo; every teammate runs one command and gets a byte-identical agent environment on both Claude Code and Codex. <code>axur sync --check</code> in CI fails the pull request when someone's setup has drifted.</p>
+<pre><i># axur.toml — committed to the repo</i>
+<b>[targets]</b>
+agents = ["claude-code", "codex"]
+scope  = "project"
+
+<b>[skills]</b>
+"vercel-labs/agent-skills#nextjs"   = "1.4.0"      <em>← pinned</em>
+"ahmed6ww/ax-agents#rust-architect" = "^2.0"
+
+<b>[mcp]</b>
+context7 = { command = "npx", args = ["-y", "@upstash/context7-mcp"] }
+
+<b>[hooks]</b>
+pre-commit = "ahmed6ww/ax-agents#fmt-guard"</pre>
+          <p>The lockfile beside it must record what the competitor's does not: a <b>resolved commit SHA per skill</b>, the digest of every file installed, and the target each one was rendered for — committed to the repo, not kept in <code>$HOME</code>.</p>
+          <p><b>Nobody has this.</b> skills.sh's ledger is per-machine and records no ref, so it cannot express a requirement — only a history. The two things that make a lockfile reproducible are the two things it omits: a resolved commit per skill, and living in the repo. This is the single feature that turns ax from a preference into a requirement — the thing a staff engineer mandates for the team rather than a tool an individual happens to like.</p>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="inum">2</div>
+        <div>
+          <h4>Bundles — install an environment, not a file</h4>
+          <p>One <code>axur install</code> provisions skills, subagents, slash commands, hooks, MCP servers and tool permissions together, as a versioned unit. Emit a Claude Code plugin via <code>.claude-plugin/plugin.json</code> so you are riding Anthropic's native distribution mechanism instead of competing with it.</p>
+          <p>This is the concrete payoff of going vertical: a competitor supporting 76 agents can never ship it, because 74 of those agents have no concept of a hook or a subagent.</p>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="inum">3</div>
+        <div>
+          <h4><code>axur audit</code> — show what you're about to run<span class="tag def">Defensible</span></h4>
+          <p>Every skill is a prompt-injection surface and every MCP server is command execution on the developer's machine. skills.sh installs from arbitrary git URLs with no verification of any kind. Print what a bundle will execute, which tools it grants, and what changed since the last install; verify digests; refuse on mismatch.</p>
+          <p>This turns the security work from the audit into the sales story. It is also the first question a security team asks, and right now nobody in this ecosystem has an answer.</p>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="inum">4</div>
+        <div>
+          <h4>Interoperate — don't fight the catalog</h4>
+          <p><code>axur install vercel-labs/agent-skills</code> must simply work, along with any git URL skills.sh accepts. Consume their ecosystem and wrap it in pinning, locking and verification.</p>
+          <p>This kills the &ldquo;but they have a hundred thousand skills&rdquo; objection outright. You are not the rival catalog; you are the safe, reproducible way to consume every catalog. It also means your addressable content library is theirs on day one.</p>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="inum">5</div>
+        <div>
+          <h4>Profiles — <code>axur use frontend</code></h4>
+          <p>Swap an entire agent environment per context: frontend work, infra, incident response, code review. Cheap to build once bundles exist, immediately demoable, and genuinely novel — nobody in the space has it. Good candidate for the launch demo precisely because it is the feature people can see working in ten seconds.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Risks</p>
+    <h2>Two problems to face now, not later</h2>
+
+    <h3>Distribution — and a naming decision you can't defer</h3>
+    <p><code>npx skills add x</code> beats <code>curl | sh</code> plus a Rust binary for the thirty seconds where someone decides whether to try your tool. Keep Rust for the binary, but ship a thin npm wrapper that downloads the right prebuilt artifact so trial cost matches theirs.</p>
+    <p>That runs straight into a naming problem. <code>axur</code> is <b>taken on npm</b>, and <code>axur</code> on crates.io is an unrelated distributed-systems crate published in 2019 — which means the <code>cargo install axur</code> line currently in your README installs somebody else's package. <code>ax-cli</code> is also taken on npm; <code>axcli</code> and <code>axur</code> are free. Decide the published name now, while you have no users to migrate.</p>
+
+    <h3>Anthropic may build this</h3>
+    <p>Plugins and marketplaces are already native to Claude Code, and reproducibility is an obvious next step for them. You cannot prevent that. What you can do is stand where they structurally will not: <b>Anthropic will never make Codex a first-class target.</b> Cross-agent parity plus team reproducibility is a position that stays defensible even if Claude Code ships a lockfile tomorrow — and it is another argument for keeping Codex, not quietly deprioritizing it.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">Consequences</p>
+    <h2>What the pivot changes in the code</h2>
+    <ul class="tight">
+      <li><b>Delete <code>cursor.rs</code></b> — 181 lines, plus <code>Target::Cursor</code>, <code>TargetArg::Cursor</code>, <code>cursor_config_dir()</code> and the init detection. No findings disappear; several lose an evidence line.</li>
+      <li><b>ARC-06 collapses.</b> The ~120 duplicated lines across the Claude and Codex installers become one shared skill renderer parameterized by root path, because both targets now emit the identical <code>SKILL.md</code> format. This was the hardest cleanup in the original plan and the pivot does most of it for free.</li>
+      <li><b>ARC-07 gets promoted.</b> The capability model stops being tidy-up and becomes the core abstraction — Claude Code has skills, agents, commands, hooks, MCP and permissions; Codex has skills and MCP. Bundles are built directly on it.</li>
+      <li><b>BUG-12 gets a real answer.</b> Codex has no subagent concept, so an agent's system prompt has to become a skill or an <code>AGENTS.md</code> contribution. Decide it explicitly instead of silently dropping the prompt on the floor.</li>
+      <li><b>P0 grows and P3 shrinks.</b> Path correctness joins the containment phase. Cross-platform release polish matters less than being right on the two targets.</li>
+    </ul>
+
+    <h3>Revised phase order</h3>
+<pre><b>P0</b>  Correct paths · drop Cursor · the P0 security set     <i>~3 days</i>
+<b>P1</b>  Capability model · shared renderer · install ledger   <i>~1 week</i>
+    <i>axur uninstall · --json/--dry-run · CI</i>
+<b>P2</b>  <em>axur.toml + axur.lock + axur sync</em>  ← the wedge          <i>~2 weeks</i>
+    <i>digests, pinning, sync --check</i>
+<b>P3</b>  Bundles · axur audit · git-source interop              <i>~2 weeks</i>
+<b>P4</b>  Profiles · npm wrapper · launch                      <i>~1 week</i></pre>
+    <p>That is roughly six weeks to something genuinely differentiated, and the first three days of it are fixing a product that does not currently work on the platforms you are betting on.</p>
+  </section>
+
+  <footer>
+    Companion to the ax hardening register · positioning as of 26 August 2026<br>
+    Sources — <a href="https://vercel.com/changelog/introducing-skills-the-open-agent-skills-ecosystem">Vercel changelog, 20 Jan 2026</a> · <a href="https://github.com/vercel-labs/skills">github.com/vercel-labs/skills</a> · <a href="https://www.skills.sh/docs">skills.sh/docs</a> · <a href="https://learn.chatgpt.com/docs/build-skills">Codex skills documentation</a> · <a href="https://code.claude.com/docs/en/skills">Claude Code skills documentation</a> · <a href="https://github.com/agentskill-sh/ags">agentskill-sh/ags</a><br>
+    Registry availability checked live against registry.npmjs.org and crates.io on 26 Aug 2026. skills.sh lockfile schema read from a live v3 <code>~/.agents/.skill-lock.json</code> with 16 installed skills.
+  </footer>
+
+</div>
