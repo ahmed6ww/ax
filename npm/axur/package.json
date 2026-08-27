@@ -4,13 +4,13 @@
   "description": "Keep your team running the same agent setup on Claude Code and Codex",
   "license": "MIT",
   "author": "ahmed6ww",
-  "homepage": "https://github.com/ahmed6ww/ax#readme",
+  "homepage": "https://github.com/agenzalabs/ax#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ahmed6ww/ax.git"
+    "url": "git+https://github.com/agenzalabs/ax.git"
   },
   "bugs": {
-    "url": "https://github.com/ahmed6ww/ax/issues"
+    "url": "https://github.com/agenzalabs/ax/issues"
   },
   "keywords": [
     "claude-code",
