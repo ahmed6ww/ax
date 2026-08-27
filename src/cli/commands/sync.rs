@@ -17,7 +17,7 @@ use crate::core::lockfile::{digest, tree_digest, LockedBundle, LockedMcp, Locked
 use crate::core::manifest::{Manifest, SkillSpec};
 use crate::core::source::{GitHubSource, ResolvedSkill, SourceClient};
 use crate::core::trust::Request;
-use crate::installers::{get_installer, SettingsContribution, Target};
+use crate::installers::{get_installer, Installer, SettingsContribution, Target};
 use crate::utils::ui;
 
 /// Sources resolved at once. Enough to hide latency, low enough to stay well
@@ -187,29 +187,42 @@ async fn run(
             .unwrap_or_default();
 
         if !names.is_empty() && !check {
-            for target in &targets {
-                let installer = get_installer(*target, scope);
-                let mut pruned = 0usize;
-                for name in &names {
-                    if installer.remove_skill(name)? {
-                        pruned += 1;
+            // Same rule as a normal sync: if the second target refuses, the
+            // first one is put back.
+            let journal = crate::core::tx::begin();
+            let mut reports: Vec<String> = Vec::new();
+            let outcome: Result<()> = (|| {
+                for target in &targets {
+                    let installer = get_installer(*target, scope);
+                    let mut pruned = 0usize;
+                    for name in &names {
+                        if installer.remove_skill(name)? {
+                            pruned += 1;
+                        }
                     }
+                    // A bundle's settings contributions have to come back out too.
+                    let previous = previous_contribution(existing.as_ref(), *target);
+                    if !previous.is_empty() {
+                        installer.apply_settings(&SettingsContribution::default(), &previous)?;
+                    }
+                    reports.push(format!(
+                        "{}   {}\n{} {} removed",
+                        ui::bold(target.display_name()),
+                        ui::dim(&installer.location()),
+                        ui::dim("-"),
+                        plural(pruned, "skill")
+                    ));
                 }
-                // A bundle's settings contributions have to come back out too.
-                let previous = previous_contribution(existing.as_ref(), *target);
-                if !previous.is_empty() {
-                    installer.apply_settings(&SettingsContribution::default(), &previous)?;
-                }
-                ui::success(&format!(
-                    "{}   {}\n{} {} removed",
-                    ui::bold(target.display_name()),
-                    ui::dim(&installer.location()),
-                    ui::dim("-"),
-                    plural(pruned, "skill")
-                ));
+
+                Lockfile::new().save(&lock_path)?;
+                Ok(())
+            })();
+            outcome.map_err(rolled_back)?;
+            journal.commit();
+            for report in &reports {
+                ui::success(report);
             }
 
-            Lockfile::new().save(&lock_path)?;
             ui::outro("Nothing declared - everything removed");
             return Ok(());
         }
@@ -572,192 +585,253 @@ async fn run(
         })
         .unwrap_or_default();
 
-    // ---- install ----------------------------------------------------------
-    for target in &targets {
-        let installer = get_installer(*target, scope);
-        let caps = installer.capabilities();
-        let mut lines: Vec<String> = Vec::new();
-        let mut contribution = SettingsContribution::default();
-
-        for (name, files) in &installed {
-            installer.install_files(name, files).with_context(|| {
-                format!("Failed to install '{}' for {}", name, target.display_name())
+    // ---- preflight --------------------------------------------------------
+    //
+    // Resolve every destination, and check every file a bundle points at, while
+    // the disk is still untouched. Both used to fail partway through the write
+    // loop, after an earlier target had already been changed.
+    let installers: Vec<(Target, Box<dyn Installer>)> = targets
+        .iter()
+        .map(|target| {
+            let installer = get_installer(*target, scope);
+            installer.skills_root().with_context(|| {
+                format!(
+                    "Cannot determine where {} keeps its skills",
+                    target.display_name()
+                )
             })?;
-        }
-        if !installed.is_empty() {
-            lines.push(format!(
-                "{} {}",
-                ui::good("✓"),
-                plural(installed.len(), "skill")
-            ));
-        }
+            Ok((*target, installer))
+        })
+        .collect::<Result<_>>()?;
 
-        for (bundle_name, payload) in &bundles {
-            let bundle = &payload.manifest;
-
-            for dir in &bundle.skills {
-                installer
-                    .install_files(stem(dir), &payload.skill_files(dir))
-                    .with_context(|| format!("Failed to install skill '{}'", dir))?;
-            }
-            if !bundle.skills.is_empty() {
-                lines.push(format!(
-                    "{} {} {}",
-                    ui::good("✓"),
-                    plural(bundle.skills.len(), "skill"),
-                    ui::dim(&format!("from {}", bundle_name))
-                ));
-            }
-
-            if caps.subagents && !bundle.agents.is_empty() {
-                for path in &bundle.agents {
-                    let bytes = payload
-                        .file(path)
-                        .with_context(|| format!("Bundle '{}' is missing {}", bundle_name, path))?;
-                    installer.install_subagent(stem(path), bytes)?;
-                }
-                lines.push(format!(
-                    "{} {}",
-                    ui::good("✓"),
-                    plural(bundle.agents.len(), "subagent")
-                ));
-            }
-
-            if caps.commands && !bundle.commands.is_empty() {
-                for path in &bundle.commands {
-                    let bytes = payload
-                        .file(path)
-                        .with_context(|| format!("Bundle '{}' is missing {}", bundle_name, path))?;
-                    installer.install_command(stem(path), bytes)?;
-                }
-                lines.push(format!(
-                    "{} {}",
-                    ui::good("✓"),
-                    plural(bundle.commands.len(), "command")
-                ));
-            }
-
-            if caps.hooks && !bundle.hooks.is_empty() {
-                let scripts: Vec<(String, Vec<u8>)> = bundle
-                    .scripts
-                    .iter()
-                    .filter_map(|p| payload.file(p).map(|b| (p.clone(), b.clone())))
-                    .collect();
-
-                if let Some(dir) = installer.stage_bundle_files(bundle_name, &scripts)? {
-                    for hook in &bundle.hooks {
-                        // An absolute path keeps the hook working regardless of
-                        // the directory Claude Code is started from.
-                        let resolved = dir.join(&hook.command).display().to_string();
-                        contribution.hooks.push((hook.clone(), resolved));
-                    }
-                }
-            }
-
-            if caps.permissions {
-                contribution
-                    .permissions
-                    .allow
-                    .extend(bundle.permissions.allow.clone());
-                contribution
-                    .permissions
-                    .deny
-                    .extend(bundle.permissions.deny.clone());
-                contribution
-                    .permissions
-                    .ask
-                    .extend(bundle.permissions.ask.clone());
-            }
-        }
-
-        if !tools.is_empty() && caps.mcp {
-            installer.install_mcp(&tools)?;
-            lines.push(format!(
-                "{} {}",
-                ui::good("✓"),
-                plural(tools.len(), "MCP server")
-            ));
-        }
-
-        // Remove what the previous sync contributed, then apply the current
-        // set, so a shared settings file never accumulates duplicates.
-        let previous = previous_contribution(existing.as_ref(), *target);
-        if !contribution.is_empty() || !previous.is_empty() {
-            installer.apply_settings(&contribution, &previous)?;
-            if !contribution.hooks.is_empty() {
-                lines.push(format!(
-                    "{} {}",
-                    ui::good("✓"),
-                    plural(contribution.hooks.len(), "hook")
-                ));
-            }
-            let rules = contribution.permissions.allow.len()
-                + contribution.permissions.deny.len()
-                + contribution.permissions.ask.len();
-            if rules > 0 {
-                lines.push(format!(
-                    "{} {}",
-                    ui::good("✓"),
-                    plural(rules, "permission rule")
-                ));
-            }
-        }
-
-        let mut pruned = 0usize;
-        for name in &stale {
-            if installer.remove_skill(name)? {
-                pruned += 1;
-            }
-        }
-        if pruned > 0 {
-            lines.push(format!(
-                "{} {} removed",
-                ui::dim("−"),
-                plural(pruned, "skill")
-            ));
-        }
-
-        // Anything this target cannot take is named, never silently dropped.
-        let skipped: Vec<String> = bundles
+    for (bundle_name, payload) in &bundles {
+        let bundle = &payload.manifest;
+        for path in bundle
+            .agents
             .iter()
-            .flat_map(|(_, p)| caps.unsupported(&p.manifest))
-            .collect();
-        if !skipped.is_empty() {
-            lines.push(ui::dim(&format!(
-                "·  skipped, unsupported: {}",
-                skipped.join(", ")
-            )));
-        }
-
-        ui::success(&format!(
-            "{}   {}\n{}",
-            ui::bold(target.display_name()),
-            ui::dim(&installer.location()),
-            lines.join("\n")
-        ));
-
-        for (bundle_name, _) in &bundles {
-            if let Some(locked) = resolved_lock
-                .bundles
-                .iter_mut()
-                .find(|b| &b.name == bundle_name)
-            {
-                for (_, command) in &contribution.hooks {
-                    if !locked.hook_commands.contains(command) {
-                        locked.hook_commands.push(command.clone());
-                    }
-                }
+            .chain(&bundle.commands)
+            .chain(&bundle.scripts)
+        {
+            if payload.file(path).is_none() {
+                anyhow::bail!(
+                    "Bundle '{}' declares {} but the source does not contain it.",
+                    bundle_name,
+                    path
+                );
             }
         }
     }
 
-    // ---- write the lock ---------------------------------------------------
+    // ---- install ----------------------------------------------------------
+    //
+    // Everything past this point writes to disk. The journal records each
+    // change so a failure on the second target undoes the first, rather than
+    // leaving the machine half-configured with no lockfile describing it.
+    let journal = crate::core::tx::begin();
+
+    // Per-target reports are held until the whole run commits. Announcing a
+    // target as done while a later one can still roll it back reads as a
+    // contradiction: the run says the skill was installed, then says nothing
+    // was changed.
+    let mut reports: Vec<String> = Vec::new();
+
+    let outcome: Result<()> = (|| {
+        for (target, installer) in &installers {
+            let caps = installer.capabilities();
+            let mut lines: Vec<String> = Vec::new();
+            let mut contribution = SettingsContribution::default();
+
+            for (name, files) in &installed {
+                installer.install_files(name, files).with_context(|| {
+                    format!("Failed to install '{}' for {}", name, target.display_name())
+                })?;
+            }
+            if !installed.is_empty() {
+                lines.push(format!(
+                    "{} {}",
+                    ui::good("✓"),
+                    plural(installed.len(), "skill")
+                ));
+            }
+
+            for (bundle_name, payload) in &bundles {
+                let bundle = &payload.manifest;
+
+                for dir in &bundle.skills {
+                    installer
+                        .install_files(stem(dir), &payload.skill_files(dir))
+                        .with_context(|| format!("Failed to install skill '{}'", dir))?;
+                }
+                if !bundle.skills.is_empty() {
+                    lines.push(format!(
+                        "{} {} {}",
+                        ui::good("✓"),
+                        plural(bundle.skills.len(), "skill"),
+                        ui::dim(&format!("from {}", bundle_name))
+                    ));
+                }
+
+                if caps.subagents && !bundle.agents.is_empty() {
+                    for path in &bundle.agents {
+                        let bytes = payload.file(path).with_context(|| {
+                            format!("Bundle '{}' is missing {}", bundle_name, path)
+                        })?;
+                        installer.install_subagent(stem(path), bytes)?;
+                    }
+                    lines.push(format!(
+                        "{} {}",
+                        ui::good("✓"),
+                        plural(bundle.agents.len(), "subagent")
+                    ));
+                }
+
+                if caps.commands && !bundle.commands.is_empty() {
+                    for path in &bundle.commands {
+                        let bytes = payload.file(path).with_context(|| {
+                            format!("Bundle '{}' is missing {}", bundle_name, path)
+                        })?;
+                        installer.install_command(stem(path), bytes)?;
+                    }
+                    lines.push(format!(
+                        "{} {}",
+                        ui::good("✓"),
+                        plural(bundle.commands.len(), "command")
+                    ));
+                }
+
+                if caps.hooks && !bundle.hooks.is_empty() {
+                    let scripts: Vec<(String, Vec<u8>)> = bundle
+                        .scripts
+                        .iter()
+                        .filter_map(|p| payload.file(p).map(|b| (p.clone(), b.clone())))
+                        .collect();
+
+                    if let Some(dir) = installer.stage_bundle_files(bundle_name, &scripts)? {
+                        for hook in &bundle.hooks {
+                            // An absolute path keeps the hook working regardless of
+                            // the directory Claude Code is started from.
+                            let resolved = dir.join(&hook.command).display().to_string();
+                            contribution.hooks.push((hook.clone(), resolved));
+                        }
+                    }
+                }
+
+                if caps.permissions {
+                    contribution
+                        .permissions
+                        .allow
+                        .extend(bundle.permissions.allow.clone());
+                    contribution
+                        .permissions
+                        .deny
+                        .extend(bundle.permissions.deny.clone());
+                    contribution
+                        .permissions
+                        .ask
+                        .extend(bundle.permissions.ask.clone());
+                }
+            }
+
+            if !tools.is_empty() && caps.mcp {
+                installer.install_mcp(&tools)?;
+                lines.push(format!(
+                    "{} {}",
+                    ui::good("✓"),
+                    plural(tools.len(), "MCP server")
+                ));
+            }
+
+            // Remove what the previous sync contributed, then apply the current
+            // set, so a shared settings file never accumulates duplicates.
+            let previous = previous_contribution(existing.as_ref(), *target);
+            if !contribution.is_empty() || !previous.is_empty() {
+                installer.apply_settings(&contribution, &previous)?;
+                if !contribution.hooks.is_empty() {
+                    lines.push(format!(
+                        "{} {}",
+                        ui::good("✓"),
+                        plural(contribution.hooks.len(), "hook")
+                    ));
+                }
+                let rules = contribution.permissions.allow.len()
+                    + contribution.permissions.deny.len()
+                    + contribution.permissions.ask.len();
+                if rules > 0 {
+                    lines.push(format!(
+                        "{} {}",
+                        ui::good("✓"),
+                        plural(rules, "permission rule")
+                    ));
+                }
+            }
+
+            let mut pruned = 0usize;
+            for name in &stale {
+                if installer.remove_skill(name)? {
+                    pruned += 1;
+                }
+            }
+            if pruned > 0 {
+                lines.push(format!(
+                    "{} {} removed",
+                    ui::dim("−"),
+                    plural(pruned, "skill")
+                ));
+            }
+
+            // Anything this target cannot take is named, never silently dropped.
+            let skipped: Vec<String> = bundles
+                .iter()
+                .flat_map(|(_, p)| caps.unsupported(&p.manifest))
+                .collect();
+            if !skipped.is_empty() {
+                lines.push(ui::dim(&format!(
+                    "·  skipped, unsupported: {}",
+                    skipped.join(", ")
+                )));
+            }
+
+            reports.push(format!(
+                "{}   {}\n{}",
+                ui::bold(target.display_name()),
+                ui::dim(&installer.location()),
+                lines.join("\n")
+            ));
+
+            for (bundle_name, _) in &bundles {
+                if let Some(locked) = resolved_lock
+                    .bundles
+                    .iter_mut()
+                    .find(|b| &b.name == bundle_name)
+                {
+                    for (_, command) in &contribution.hooks {
+                        if !locked.hook_commands.contains(command) {
+                            locked.hook_commands.push(command.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        // The lockfile is written inside the journal: if it cannot be saved, the
+        // installs it would have described are rolled back too, so the disk and the
+        // lock can never disagree.
+        resolved_lock.save(&lock_path)?;
+        Ok(())
+    })();
+
+    outcome.map_err(rolled_back)?;
+    journal.commit();
+
+    // ---- report -----------------------------------------------------------
+    for report in &reports {
+        ui::success(report);
+    }
+
     let changed = existing
         .as_ref()
         .map(|prev| !prev.diff(&resolved_lock).is_empty())
         .unwrap_or(true);
-
-    resolved_lock.save(&lock_path)?;
 
     ui::outro(&if changed {
         format!(
@@ -770,6 +844,15 @@ async fn run(
     });
 
     Ok(())
+}
+
+/// Name the rollback at the top of the error chain.
+///
+/// The underlying failure stays visible as the cause; this only answers the
+/// question a half-finished install would otherwise leave open, which is
+/// whether the machine has been left in some in-between state.
+fn rolled_back(err: anyhow::Error) -> anyhow::Error {
+    err.context("Nothing was changed - every target was rolled back to its previous state")
 }
 
 /// A pinned commit is immutable, so identical bytes are guaranteed. A mismatch

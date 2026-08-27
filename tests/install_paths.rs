@@ -267,3 +267,131 @@ fn removing_a_skill_leaves_its_siblings_alone() {
         assert!(!project.join(".claude/skills/drop-me").exists());
     });
 }
+
+// ---------------------------------------------------------------------------
+// Rollback across targets
+//
+// A sync writes to every configured target in turn and only then saves the
+// lockfile. Before the undo journal, a failure on the second target left the
+// first one fully written with no lockfile describing it, so the next run had
+// no idea the files were there and never pruned them.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_failure_on_the_second_target_undoes_the_first() {
+    in_temp_project(|project, home| {
+        let claude = get_installer(Target::Claude, Scope::Project);
+        let codex = get_installer(Target::Codex, Scope::Project);
+
+        let journal = agentpm_lib::core::tx::begin();
+        let outcome = (|| -> anyhow::Result<()> {
+            claude.install_files("tokio-patterns", &skill_files())?;
+            claude.install_mcp(&[context7()])?;
+            // Stands in for any mid-loop failure on a later target: a
+            // traversing name is refused after the first target is written.
+            codex.install_files("../escaped", &skill_files())?;
+            Ok(())
+        })();
+        assert!(outcome.is_err(), "the second target should have refused");
+        drop(journal);
+
+        assert!(
+            !project.join(".claude/skills/tokio-patterns").exists(),
+            "the first target's skill should have been rolled back"
+        );
+        assert!(
+            !project.join(".mcp.json").exists(),
+            "MCP configuration written before the failure should be gone"
+        );
+        assert!(
+            !home.join("work/repo/.claude").exists() || !project.join(".claude").exists(),
+            "no directory agentpm created should survive the rollback"
+        );
+    });
+}
+
+#[test]
+fn a_rolled_back_run_restores_what_it_overwrote_and_what_it_pruned() {
+    in_temp_project(|project, _home| {
+        let claude = get_installer(Target::Claude, Scope::Project);
+
+        // A previous, successful sync.
+        claude.install_files("keep-me", &skill_files()).unwrap();
+        claude
+            .install_files("drop-me", &[("SKILL.md".to_string(), b"old body".to_vec())])
+            .unwrap();
+        let hand_written = project.join(".claude/settings.json");
+        fs::write(
+            &hand_written,
+            b"{\"permissions\":{\"allow\":[\"Bash(ls)\"]}}",
+        )
+        .unwrap();
+
+        // A later run that overwrites one skill, prunes another, and then fails.
+        let journal = agentpm_lib::core::tx::begin();
+        let outcome = (|| -> anyhow::Result<()> {
+            claude.install_files("keep-me", &[("SKILL.md".to_string(), b"new body".to_vec())])?;
+            assert!(claude.remove_skill("drop-me")?);
+            claude.install_files("../escaped", &skill_files())?;
+            Ok(())
+        })();
+        assert!(outcome.is_err());
+        drop(journal);
+
+        // The overwrite is undone.
+        let body = fs::read_to_string(project.join(".claude/skills/keep-me/SKILL.md")).unwrap();
+        assert!(
+            body.contains("tokio-patterns"),
+            "an overwritten skill should be back to its original bytes, got: {body}"
+        );
+        // The prune is undone.
+        assert_eq!(
+            fs::read_to_string(project.join(".claude/skills/drop-me/SKILL.md")).unwrap(),
+            "old body",
+            "a pruned skill should come back"
+        );
+        // Nothing the user wrote by hand was touched.
+        assert!(hand_written.is_file());
+        // And no holding directory is left lying around.
+        let strays: Vec<_> = fs::read_dir(project.join(".claude/skills"))
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().contains("agentpm-trash"))
+            .collect();
+        assert!(
+            strays.is_empty(),
+            "rollback left a holding directory behind"
+        );
+    });
+}
+
+#[test]
+fn a_committed_run_keeps_everything_it_wrote() {
+    in_temp_project(|project, _home| {
+        let claude = get_installer(Target::Claude, Scope::Project);
+        claude
+            .install_files("drop-me", &[("SKILL.md".to_string(), b"old".to_vec())])
+            .unwrap();
+
+        let journal = agentpm_lib::core::tx::begin();
+        claude
+            .install_files("tokio-patterns", &skill_files())
+            .unwrap();
+        assert!(claude.remove_skill("drop-me").unwrap());
+        journal.commit();
+
+        assert!(project
+            .join(".claude/skills/tokio-patterns/SKILL.md")
+            .is_file());
+        assert!(!project.join(".claude/skills/drop-me").exists());
+        let strays: Vec<_> = fs::read_dir(project.join(".claude/skills"))
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().contains("agentpm-trash"))
+            .collect();
+        assert!(
+            strays.is_empty(),
+            "commit must delete the holding directory"
+        );
+    });
+}

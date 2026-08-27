@@ -8,6 +8,7 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::core::tx;
 use crate::utils::paths;
 
 /// Join `relative` onto `base`, refusing anything that escapes it.
@@ -64,7 +65,11 @@ fn write_inner(path: &Path, contents: &[u8], backup: bool) -> Result<()> {
     let parent = path
         .parent()
         .context("Refusing to write to a path with no parent directory")?;
-    fs::create_dir_all(parent).with_context(|| format!("Failed to create {}", parent.display()))?;
+    tx::create_dir_all(parent)?;
+
+    // Capture what is here before anything is disturbed, so a failure later in
+    // the same run can put this file back exactly as it was.
+    tx::record_write(path);
 
     let name = path
         .file_name()
@@ -82,6 +87,7 @@ fn write_inner(path: &Path, contents: &[u8], backup: bool) -> Result<()> {
         // project-scoped install the stray files would be committed.
         if path.exists() {
             let backup_path = parent.join(format!("{}.agentpm-bak", name));
+            tx::record_write(&backup_path);
             fs::copy(path, &backup_path).with_context(|| {
                 format!("Failed to back up {} before rewriting it", path.display())
             })?;
@@ -103,8 +109,13 @@ fn write_inner(path: &Path, contents: &[u8], backup: bool) -> Result<()> {
         fs::remove_file(path).ok();
     }
 
-    fs::rename(&tmp, path)
-        .with_context(|| format!("Failed to move staged file into {}", path.display()))?;
+    // Do not leave a staged file behind when the rename is the thing that
+    // failed: the directory is one an agent scans.
+    if let Err(err) = fs::rename(&tmp, path) {
+        let _ = fs::remove_file(&tmp);
+        return Err(err)
+            .with_context(|| format!("Failed to move staged file into {}", path.display()));
+    }
 
     Ok(())
 }

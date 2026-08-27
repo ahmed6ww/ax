@@ -187,7 +187,7 @@ impl Installer for ClaudeInstaller {
 
         let skill_folder = skill_dir(&self.skills_dir()?, agent_name)?;
         if skill_folder.exists() {
-            fs::remove_dir_all(&skill_folder)?;
+            crate::core::tx::remove_dir_all(&skill_folder)?;
         }
 
         Ok(())

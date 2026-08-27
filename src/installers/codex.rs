@@ -136,7 +136,7 @@ impl Installer for CodexInstaller {
         for name in [format!("{}-identity", agent_name), agent_name.to_string()] {
             let folder = skill_dir(&skills_root, &name)?;
             if folder.exists() {
-                fs::remove_dir_all(&folder)?;
+                crate::core::tx::remove_dir_all(&folder)?;
             }
         }
 

@@ -185,7 +185,7 @@ pub trait Installer: Send + Sync {
     fn remove_skill(&self, name: &str) -> Result<bool> {
         let dir = common::skill_dir(&self.skills_root()?, name)?;
         if dir.exists() {
-            std::fs::remove_dir_all(&dir)?;
+            crate::core::tx::remove_dir_all(&dir)?;
             return Ok(true);
         }
         Ok(false)
