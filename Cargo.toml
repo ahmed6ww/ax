@@ -1,6 +1,6 @@
 [package]
 name = "axur"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["ahmed6ww"]
 description = "Keep your team running the same agent setup on Claude Code and Codex"

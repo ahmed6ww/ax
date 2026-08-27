@@ -27,6 +27,19 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+
+      - name: The tag and Cargo.toml must agree
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          manifest=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          if [ "$tag" != "$manifest" ]; then
+            echo "Tag is $tag but Cargo.toml says $manifest."
+            echo "crates.io versions are permanent; refusing to guess."
+            exit 1
+          fi
+          echo "version $tag"
+
       - run: cargo fmt --all --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --all-targets
@@ -200,17 +213,18 @@ jobs:
       - name: Publish platform packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DIST: ${{ steps.tag.outputs.dist }}
         run: |
           set -euo pipefail
           for dir in npm/platforms/*/; do
-            echo "--- $dir"
-            npm publish "$dir" --access public --provenance --tag "${{ steps.tag.outputs.dist }}"
+            ./scripts/npm-publish.sh "$dir"
           done
 
       - name: Publish the launcher
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish npm/axur --access public --provenance --tag "${{ steps.tag.outputs.dist }}"
+          DIST: ${{ steps.tag.outputs.dist }}
+        run: ./scripts/npm-publish.sh ./npm/axur
 
   crates:
     name: Publish to crates.io
