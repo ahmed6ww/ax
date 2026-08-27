@@ -10,6 +10,9 @@ use clap::{Parser, Subcommand};
 /// `axur.lock`, and every machine that syncs gets the same setup.
 #[derive(Parser, Debug)]
 #[command(name = "axur")]
+// Without this, clap takes the usage line from argv[0] and Windows users are
+// told to run "axur.exe".
+#[command(bin_name = "axur")]
 #[command(author = "ahmed6ww")]
 #[command(version = env!("CARGO_PKG_VERSION"))]
 #[command(about = "Keep your team running the same agent setup on Claude Code and Codex", long_about = None)]
