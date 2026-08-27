@@ -113,6 +113,9 @@ curl -fsSL https://raw.githubusercontent.com/agenzalabs/ax/main/install.sh | sh
 # Windows
 irm https://raw.githubusercontent.com/agenzalabs/ax/main/install.ps1 | iex
 
+# npm
+npm install -g @axur/cli
+
 # From source
 cargo install axur
 ```

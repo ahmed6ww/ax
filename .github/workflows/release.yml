@@ -196,7 +196,7 @@ jobs:
       - name: Stamp version and place binaries
         run: node scripts/npm-prepare.mjs "${{ github.ref_name }}" artifacts
 
-      # A prerelease tag must not become what `npm install axur` gives people.
+      # A prerelease tag must not become what `npm install @axur/cli` gives people.
       - name: Choose the dist-tag
         id: tag
         run: |
@@ -209,7 +209,7 @@ jobs:
           fi
 
       # Platform packages first: the shim pins them at an exact version, so
-      # publishing it first would leave `npm install axur` briefly broken.
+      # publishing it first would leave `npm install @axur/cli` briefly broken.
       - name: Publish platform packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -224,7 +224,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           DIST: ${{ steps.tag.outputs.dist }}
-        run: ./scripts/npm-publish.sh ./npm/axur
+        run: ./scripts/npm-publish.sh ./npm/launcher
 
   crates:
     name: Publish to crates.io

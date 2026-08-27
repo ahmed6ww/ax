@@ -74,7 +74,8 @@ for (const [dir, { asset, binary }] of Object.entries(PLATFORMS)) {
 }
 
 // ---- the shim -------------------------------------------------------------
-const shimPath = join(root, "npm", "axur", "package.json");
+const launcherDir = join(root, "npm", "launcher");
+const shimPath = join(launcherDir, "package.json");
 const shim = readJson(shimPath);
 shim.version = version;
 for (const name of Object.keys(shim.optionalDependencies)) {
@@ -83,6 +84,6 @@ for (const name of Object.keys(shim.optionalDependencies)) {
 }
 writeJson(shimPath, shim);
 
-copyFileSync(join(root, "README.md"), join(root, "npm", "axur", "README.md"));
+copyFileSync(join(root, "README.md"), join(launcherDir, "README.md"));
 
-console.log(`axur  ${version}`);
+console.log(`@axur/cli  ${version}`);

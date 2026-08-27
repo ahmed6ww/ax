@@ -9,6 +9,6 @@
 .vscode/
 
 # npm release outputs — placed by scripts/npm-prepare.mjs at publish time
-npm/axur/README.md
+npm/launcher/README.md
 npm/platforms/*/bin/axur
 npm/platforms/*/bin/axur.exe

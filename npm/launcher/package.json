@@ -1,5 +1,5 @@
 {
-  "name": "axur",
+  "name": "@axur/cli",
   "version": "0.0.0",
   "description": "Keep your team running the same agent setup on Claude Code and Codex",
   "license": "MIT",
