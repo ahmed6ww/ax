@@ -73,7 +73,6 @@ fn context7() -> McpTool {
         command: "npx".to_string(),
         args: vec!["-y".to_string(), "@upstash/context7-mcp".to_string()],
         env: HashMap::new(),
-        setup_url: None,
     }
 }
 
@@ -156,6 +155,50 @@ fn codex_writes_to_dot_agents_not_dot_codex() {
         assert_eq!(
             doc["mcp_servers"]["context7"]["command"].as_str(),
             Some("npx")
+        );
+    });
+}
+
+#[test]
+fn codex_forwards_a_bare_env_reference_by_name_instead_of_writing_the_placeholder() {
+    in_temp_project(|_project, home| {
+        let mut tool = context7();
+        tool.env.insert(
+            "CONTEXT7_API_KEY".to_string(),
+            "${CONTEXT7_API_KEY}".to_string(),
+        );
+        // A genuine literal — not a secret — must still land as a static value.
+        tool.env
+            .insert("NODE_ENV".to_string(), "production".to_string());
+
+        get_installer(Target::Codex, Scope::User)
+            .install_mcp(&[tool])
+            .unwrap();
+
+        let cfg = home.join(".codex/config.toml");
+        let doc: toml::Table = fs::read_to_string(&cfg).unwrap().parse().unwrap();
+        let server = &doc["mcp_servers"]["context7"];
+
+        // Codex does not expand ${VAR} inside a static env table — forwarding
+        // it there would hand the server the literal text "${CONTEXT7_API_KEY}"
+        // instead of the actual key. It must go in env_vars, forwarded from
+        // Codex's own process environment.
+        let env_vars: Vec<&str> = server["env_vars"]
+            .as_array()
+            .expect("env_vars must be present")
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        assert_eq!(env_vars, vec!["CONTEXT7_API_KEY"]);
+
+        let env = server["env"].as_table().expect("env must be present");
+        assert_eq!(
+            env.get("NODE_ENV").and_then(|v| v.as_str()),
+            Some("production")
+        );
+        assert!(
+            !env.contains_key("CONTEXT7_API_KEY"),
+            "the reference must not also be written as a literal env value"
         );
     });
 }

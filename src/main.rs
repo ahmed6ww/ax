@@ -26,8 +26,10 @@ async fn main() -> std::process::ExitCode {
             update,
             yes,
             offline,
-        } => axur_lib::cli::commands::sync::execute(check, update, yes, offline).await,
+            agents,
+        } => axur_lib::cli::commands::sync::execute(check, update, yes, offline, agents).await,
         Commands::Uninstall { agent } => axur_lib::cli::commands::uninstall::execute(&agent).await,
+        Commands::Secrets { action } => axur_lib::cli::commands::secrets::execute(action).await,
     };
 
     match result {

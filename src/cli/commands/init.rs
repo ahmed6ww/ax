@@ -13,13 +13,6 @@ use crate::installers::Target;
 use crate::utils::paths::{self, Scope};
 use crate::utils::ui;
 
-fn detect(target: Target) -> bool {
-    match target {
-        Target::Claude => paths::claude_detected(),
-        Target::Codex => paths::codex_detected(),
-    }
-}
-
 fn user_skills_dir(target: Target) -> String {
     let path = match target {
         Target::Claude => paths::claude_skills_dir(Scope::User),
@@ -32,7 +25,10 @@ fn user_skills_dir(target: Target) -> String {
 pub async fn execute() -> Result<()> {
     ui::intro("axur init");
 
-    let detected: Vec<Target> = Target::all().into_iter().filter(|t| detect(*t)).collect();
+    let detected: Vec<Target> = Target::all()
+        .into_iter()
+        .filter(|t| t.is_detected())
+        .collect();
 
     let report = Target::all()
         .iter()

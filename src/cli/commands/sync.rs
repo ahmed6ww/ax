@@ -64,15 +64,19 @@ fn stem(path: &str) -> &str {
         .unwrap_or(path)
 }
 
-fn plural(n: usize, word: &str) -> String {
+pub(crate) fn plural(n: usize, word: &str) -> String {
     format!("{} {}{}", n, word, if n == 1 { "" } else { "s" })
 }
 
 /// One source to resolve, with everything it needs owned so the fetch can run
 /// concurrently with the others.
+///
+/// `source` is `None` for a locally-authored entry: it has nothing to resolve
+/// over the network, so it never enters the concurrent fetch stream below and
+/// this field is never read for one.
 struct Plan {
     name: String,
-    source: GitHubSource,
+    source: Option<GitHubSource>,
     path: String,
     rev: Option<String>,
     pinned: Option<String>,
@@ -101,22 +105,40 @@ impl Plan {
 
         Ok(Self {
             name: name.to_string(),
-            source,
+            source: Some(source),
             path,
             rev: spec.rev().map(str::to_string),
             pinned,
         })
     }
+
+    /// A local entry: no source to resolve, no ref, and never pinned — the
+    /// working tree is read fresh every sync and drift is caught by digest.
+    fn local(name: &str, dir: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            source: None,
+            path: dir.to_string(),
+            rev: None,
+            pinned: None,
+        }
+    }
 }
 
-pub async fn execute(check: bool, update: bool, assume_yes: bool, offline: bool) -> Result<()> {
-    run(check, update, true, assume_yes, offline).await
+pub async fn execute(
+    check: bool,
+    update: bool,
+    assume_yes: bool,
+    offline: bool,
+    agents: Option<String>,
+) -> Result<()> {
+    run(check, update, true, assume_yes, offline, agents).await
 }
 
 /// Reconcile as a continuation of another command, without opening a second
 /// rail. `install` and `uninstall` announce themselves and then hand over.
 pub(crate) async fn reconcile(assume_yes: bool) -> Result<()> {
-    run(false, false, false, assume_yes, false).await
+    run(false, false, false, assume_yes, false, None).await
 }
 
 async fn run(
@@ -125,6 +147,7 @@ async fn run(
     announce: bool,
     assume_yes: bool,
     offline: bool,
+    agents_flag: Option<String>,
 ) -> Result<()> {
     let cwd = std::env::current_dir()?;
     let manifest_path = Manifest::find(&cwd).ok_or_else(|| {
@@ -136,11 +159,19 @@ async fn run(
     let project_root = manifest_path.parent().unwrap_or(&cwd).to_path_buf();
 
     let manifest = Manifest::load(&manifest_path)?;
-    let (targets, scope) = manifest.targets.resolve()?;
+    let (declared_targets, scope) = manifest.targets.resolve()?;
 
     if announce {
         ui::intro(if check { "axur check" } else { "axur sync" });
     }
+
+    // `--check` is the CI gate: it always verifies against everything the
+    // manifest declares, never a developer's local subset, and never prompts.
+    let targets = if check {
+        declared_targets.clone()
+    } else {
+        resolve_effective_targets(&declared_targets, &project_root, agents_flag.as_deref())?
+    };
 
     ui::step(&format!(
         "{}\n{}  {}  {} scope",
@@ -246,10 +277,34 @@ async fn run(
     let client = SourceClient::new()?.offline(offline);
     let mut resolved_lock = Lockfile::new();
 
+    // ---- local skills -------------------------------------------------------
+    //
+    // Read synchronously, before the concurrent GitHub fetches below: there is
+    // no network round trip, so there is nothing to gain by interleaving it,
+    // and every downstream step (locking, digesting, installing) treats the
+    // result exactly like a GitHub-sourced skill from here on.
+    let mut skill_results: Vec<(Plan, ResolvedSkill)> = Vec::new();
+    let mut local_lines: Vec<String> = Vec::new();
+    for (name, spec) in manifest.skills.iter().filter(|(_, spec)| spec.is_local()) {
+        let dir = spec.local_dir(name)?;
+        let fetched = crate::core::source::read_local_skill(&project_root, dir)
+            .with_context(|| format!("Failed to read local skill '{}'", name))?;
+        local_lines.push(format!(
+            "{} {:<26} {}  {}",
+            ui::good("✓"),
+            name,
+            ui::dim("local"),
+            ui::dim(&plural(fetched.files.len(), "file"))
+        ));
+        skill_results.push((Plan::local(name, dir), fetched));
+    }
+    let local_count = skill_results.len();
+
     // ---- resolve, concurrently --------------------------------------------
     let skill_plans: Vec<Plan> = manifest
         .skills
         .iter()
+        .filter(|(_, spec)| !spec.is_local())
         .map(|(name, spec)| {
             let locked = existing
                 .as_ref()
@@ -271,23 +326,27 @@ async fn run(
         })
         .collect::<Result<_>>()?;
 
-    let total = skill_plans.len() + bundle_plans.len();
+    let total = local_count + skill_plans.len() + bundle_plans.len();
     let multi = ui::MultiProgress::start("Resolving…");
 
     // Progress bars are transient: a stopped bar may be cleared from the
     // screen. Every resolved source also records a line here so the listing
     // survives as part of the run's permanent output.
-    let resolved_lines = std::sync::Mutex::new(Vec::<String>::new());
+    let resolved_lines = std::sync::Mutex::new(local_lines);
 
-    let skill_results: Vec<(Plan, ResolvedSkill)> =
+    skill_results.extend(
         futures::stream::iter(skill_plans.into_iter().map(|plan| {
             let bar = multi.add(&plan.name);
             let client = &client;
             let lines = &resolved_lines;
             async move {
+                let source = plan
+                    .source
+                    .as_ref()
+                    .expect("only GitHub-sourced plans enter this stream");
                 let result = client
                     .fetch_skill(
-                        &plan.source,
+                        source,
                         &plan.path,
                         plan.rev.as_deref(),
                         plan.pinned.as_deref(),
@@ -314,8 +373,9 @@ async fn run(
             }
         }))
         .buffer_unordered(RESOLVE_CONCURRENCY)
-        .try_collect()
-        .await?;
+        .try_collect::<Vec<(Plan, ResolvedSkill)>>()
+        .await?,
+    );
 
     let bundle_results: Vec<(Plan, BundleManifest, ResolvedSkill)> =
         futures::stream::iter(bundle_plans.into_iter().map(|plan| {
@@ -323,9 +383,13 @@ async fn run(
             let client = &client;
             let lines = &resolved_lines;
             async move {
+                let source = plan
+                    .source
+                    .as_ref()
+                    .expect("bundles have no local source yet");
                 let result = client
                     .fetch_bundle(
-                        &plan.source,
+                        source,
                         &plan.path,
                         plan.rev.as_deref(),
                         plan.pinned.as_deref(),
@@ -474,6 +538,49 @@ async fn run(
         }
     }
 
+    // ---- keychain-backed secrets --------------------------------------------
+    //
+    // `axur secrets set NAME` stores a value neither target can reach on its
+    // own: Claude Code's ${VAR} expansion and Codex's env_vars both only
+    // forward what is already in *this* process's environment, and neither
+    // can read an OS keychain. For a server referencing a keychain-managed
+    // name, the fix is the same on both targets: point command at axur
+    // itself, which resolves the value and then becomes the real command.
+    for tool in &mut tools {
+        let mut managed: Vec<String> = Vec::new();
+        for value in tool.env.values() {
+            if let Some(name) = crate::core::agent::env_var_reference(value) {
+                if crate::core::secrets::is_managed(name)? && !managed.iter().any(|n| n == name) {
+                    managed.push(name.to_string());
+                }
+            }
+        }
+        if managed.is_empty() {
+            continue;
+        }
+        managed.sort();
+
+        let mut args = vec!["secrets".to_string(), "exec".to_string()];
+        for name in &managed {
+            args.push("--name".to_string());
+            args.push(name.clone());
+        }
+        args.push("--".to_string());
+        args.push(tool.command.clone());
+        args.extend(tool.args.clone());
+
+        tool.command = "axur".to_string();
+        tool.args = args;
+        // These names are now resolved by the wrapper, not by the target's
+        // own expansion — leaving the ${VAR} reference in `env` too would be
+        // redundant at best and, on a target with no expansion, wrong.
+        tool.env.retain(|_, value| {
+            crate::core::agent::env_var_reference(value)
+                .map(|name| !managed.iter().any(|m| m == name))
+                .unwrap_or(true)
+        });
+    }
+
     for tool in &tools {
         // Environment values are excluded from the digest: they hold API keys,
         // and the lockfile is committed.
@@ -489,6 +596,38 @@ async fn run(
             args: tool.args.clone(),
             digest: digest(material.as_bytes()),
         });
+    }
+
+    // ---- secrets not yet set ------------------------------------------------
+    //
+    // A ${VAR} reference axur cannot see set is not a hard failure — CI may
+    // inject it later in the pipeline, or the server may go unused this run —
+    // but writing a config that references it silently is how "the MCP server
+    // never authenticates" turns into a debugging session days later.
+    let mut missing_env: Vec<(String, String)> = Vec::new();
+    for tool in &tools {
+        for value in tool.env.values() {
+            if let Some(name) = crate::core::agent::env_var_reference(value) {
+                if std::env::var_os(name).is_none()
+                    && !missing_env
+                        .iter()
+                        .any(|(_, n): &(String, String)| n == name)
+                {
+                    missing_env.push((tool.name.clone(), name.to_string()));
+                }
+            }
+        }
+    }
+    if !missing_env.is_empty() {
+        ui::warning(&format!(
+            "{} not set in this environment\n{}",
+            plural(missing_env.len(), "environment variable"),
+            missing_env
+                .iter()
+                .map(|(server, var)| format!("{}  ·  needed by {}", var, server))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ));
     }
 
     // ---- check mode -------------------------------------------------------
@@ -840,6 +979,96 @@ async fn run(
     });
 
     Ok(())
+}
+
+/// Which agents to install for on this machine.
+///
+/// A project's `[targets].agents` is the superset it has content for; which of
+/// those a given developer actually runs is a personal choice — recorded in
+/// `~/.axur/projects.toml` (see [`crate::core::local`]), never in the repo, so
+/// cloning a project never inherits whoever synced first.
+///
+/// Resolution order: `--agents` (and it updates the cache), then the cached
+/// choice for this project, then — only on a terminal, and only when there is
+/// more than one to choose from — a prompt. A non-interactive run with no
+/// cache and no flag (CI, a piped shell) falls back to everything declared,
+/// which matches what `sync` did before per-developer selection existed.
+fn resolve_effective_targets(
+    declared: &[Target],
+    project_root: &std::path::Path,
+    agents_flag: Option<&str>,
+) -> Result<Vec<Target>> {
+    use crate::core::local::ProjectsStore;
+
+    let mut store = ProjectsStore::load()?;
+
+    if let Some(raw) = agents_flag {
+        let chosen = parse_agents_flag(raw, declared)?;
+        store.set_agents_for(project_root, &chosen);
+        store.save()?;
+        return Ok(chosen);
+    }
+
+    if let Some(cached) = store.agents_for(project_root) {
+        let filtered: Vec<Target> = cached
+            .into_iter()
+            .filter(|t| declared.contains(t))
+            .collect();
+        if !filtered.is_empty() {
+            return Ok(filtered);
+        }
+        // Everything cached has since dropped out of [targets].agents — fall
+        // through and ask again rather than silently installing nothing.
+    }
+
+    if declared.len() > 1 && ui::is_rich() {
+        let detected: Vec<Target> = declared
+            .iter()
+            .copied()
+            .filter(|t| t.is_detected())
+            .collect();
+        let chosen = ui::select_sync_targets(declared, &detected)?;
+        if chosen.is_empty() {
+            anyhow::bail!(
+                "No agents selected. Run `axur sync` again and pick at least one, \
+                 or `axur sync --agents claude-code,codex` to skip the prompt."
+            );
+        }
+        store.set_agents_for(project_root, &chosen);
+        store.save()?;
+        return Ok(chosen);
+    }
+
+    Ok(declared.to_vec())
+}
+
+/// Parse `--agents claude-code,codex`, rejecting anything the manifest does
+/// not declare — a machine-local choice cannot ask for content the project
+/// never resolved.
+fn parse_agents_flag(raw: &str, declared: &[Target]) -> Result<Vec<Target>> {
+    let mut chosen = Vec::new();
+    for part in raw.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+        let target = Target::from_slug(part).with_context(|| {
+            format!(
+                "Unknown agent '{}' in --agents. Supported: claude-code, codex.",
+                part
+            )
+        })?;
+        if !declared.contains(&target) {
+            anyhow::bail!(
+                "--agents requested '{}', but {} does not declare it in [targets].agents.",
+                part,
+                crate::core::manifest::MANIFEST_FILE
+            );
+        }
+        if !chosen.contains(&target) {
+            chosen.push(target);
+        }
+    }
+    if chosen.is_empty() {
+        anyhow::bail!("--agents was empty");
+    }
+    Ok(chosen)
 }
 
 /// Name the rollback at the top of the error chain.

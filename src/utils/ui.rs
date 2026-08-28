@@ -277,20 +277,46 @@ use crate::utils::paths::Scope;
 
 /// Choose which agents to provision, pre-selecting the ones detected.
 pub fn select_targets(detected: &[Target]) -> anyhow::Result<Vec<Target>> {
-    let mut prompt = cliclack::multiselect::<Target>("Which agents should this project provision?")
-        .required(false);
+    select_targets_prompt(
+        "Which agents should this project provision?",
+        &Target::all(),
+        detected,
+    )
+}
 
-    for target in Target::all() {
-        let hint = if detected.contains(&target) {
+/// Choose which of the agents a project already declares to sync on this
+/// machine — a checkmark per agent, not a numbered "both" choice, so picking
+/// two is just checking two boxes rather than a third, separate option.
+pub fn select_sync_targets(
+    available: &[Target],
+    detected: &[Target],
+) -> anyhow::Result<Vec<Target>> {
+    select_targets_prompt("Which agents do you use?", available, detected)
+}
+
+fn select_targets_prompt(
+    question: &str,
+    available: &[Target],
+    detected: &[Target],
+) -> anyhow::Result<Vec<Target>> {
+    let mut prompt = cliclack::multiselect::<Target>(question).required(false);
+
+    for target in available {
+        let hint = if detected.contains(target) {
             "detected"
         } else {
             "not detected"
         };
-        prompt = prompt.item(target, target.display_name(), hint);
+        prompt = prompt.item(*target, target.display_name(), hint);
     }
 
-    if !detected.is_empty() {
-        prompt = prompt.initial_values(detected.to_vec());
+    let initial: Vec<Target> = available
+        .iter()
+        .copied()
+        .filter(|t| detected.contains(t))
+        .collect();
+    if !initial.is_empty() {
+        prompt = prompt.initial_values(initial);
     }
 
     Ok(prompt.interact()?)

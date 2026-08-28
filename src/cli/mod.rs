@@ -79,11 +79,52 @@ pub enum Commands {
         /// Use only cached content; fail rather than reach the network
         #[arg(long, default_value = "false")]
         offline: bool,
+
+        /// Which agents to install for on this machine, comma-separated
+        /// (e.g. claude-code,codex). Skips the prompt and remembers the
+        /// choice for next time. Defaults to what was picked last, or asks.
+        #[arg(long, value_name = "AGENTS")]
+        agents: Option<String>,
     },
 
     /// Remove a skill or bundle from axur.toml and sync
     Uninstall {
         /// Name it was installed under
         agent: String,
+    },
+
+    /// Store API keys and tokens in the OS keychain instead of your shell profile
+    Secrets {
+        #[command(subcommand)]
+        action: Option<SecretsAction>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum SecretsAction {
+    /// Store a secret, prompted — never pass the value on the command line
+    Set {
+        /// The env var name it's referenced as in axur.toml, e.g. LINEAR_API_KEY
+        name: String,
+    },
+
+    /// Remove a stored secret
+    Unset {
+        /// The env var name
+        name: String,
+    },
+
+    /// Resolve NAMEs from the keychain into the environment, then run the
+    /// command. axur writes this into an MCP server's config itself — there
+    /// is normally no reason to run it by hand.
+    #[command(hide = true)]
+    Exec {
+        /// A secret name to resolve. Repeatable.
+        #[arg(long = "name", value_name = "NAME")]
+        names: Vec<String>,
+
+        /// The real command and its arguments, after `--`
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        command: Vec<String>,
     },
 }

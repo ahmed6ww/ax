@@ -112,14 +112,36 @@ impl Installer for CodexInstaller {
                     ),
                 );
             }
-            if !tool.env.is_empty() {
+            // Codex has no `${VAR}` expansion inside a static `env` table —
+            // unlike Claude Code's .mcp.json, a value written that way is
+            // passed to the server literally, unexpanded. A bare `${NAME}`
+            // reference is instead forwarded by name in `env_vars`, which
+            // Codex fills from its own process environment at launch; only a
+            // genuine literal (e.g. NODE_ENV = "production") goes in `env`.
+            let mut env_vars: Vec<String> = Vec::new();
+            let mut literal: Vec<(&String, &String)> = Vec::new();
+            for (key, value) in &tool.env {
+                match crate::core::agent::env_var_reference(value) {
+                    Some(name) => env_vars.push(name.to_string()),
+                    None => literal.push((key, value)),
+                }
+            }
+
+            if !literal.is_empty() {
+                literal.sort_by_key(|(k, _)| (*k).clone());
                 let mut env = toml::Table::new();
-                let mut keys: Vec<_> = tool.env.keys().collect();
-                keys.sort();
-                for key in keys {
-                    env.insert(key.clone(), toml::Value::String(tool.env[key].clone()));
+                for (key, value) in literal {
+                    env.insert(key.clone(), toml::Value::String(value.clone()));
                 }
                 entry.insert("env".to_string(), toml::Value::Table(env));
+            }
+            if !env_vars.is_empty() {
+                env_vars.sort();
+                env_vars.dedup();
+                entry.insert(
+                    "env_vars".to_string(),
+                    toml::Value::Array(env_vars.into_iter().map(toml::Value::String).collect()),
+                );
             }
 
             servers.insert(tool.name.clone(), toml::Value::Table(entry));

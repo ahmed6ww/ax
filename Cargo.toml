@@ -1,6 +1,6 @@
 [package]
 name = "axur"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
 authors = ["ahmed6ww"]
 description = "Keep your team running the same agent setup on Claude Code and Codex"
@@ -64,6 +64,10 @@ rpassword = "7.3"
 sha2 = "0.10"
 futures = "0.3"
 serde-saphyr = "1"
+
+# OS keychain (Windows Credential Manager / macOS Keychain / Linux Secret
+# Service) for `axur secrets`. Default "v1" feature covers all three natively.
+keyring = "4.1"
 
 [dev-dependencies]
 tempfile = "3.10"

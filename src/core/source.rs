@@ -15,10 +15,12 @@
 use anyhow::{Context, Result};
 use futures::stream::{StreamExt, TryStreamExt};
 use serde::Deserialize;
+use std::path::Path;
 use std::time::Duration;
 
 use crate::core::cache::Cache;
 use crate::core::lockfile::{digest, LockedFile};
+use crate::core::manifest::LOCAL_SOURCE;
 
 /// Largest file axur will pull into a skill directory.
 const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
@@ -58,6 +60,103 @@ impl ResolvedSkill {
     pub fn skill_md(&self) -> Option<&FetchedFile> {
         self.files.iter().find(|f| f.path == "SKILL.md")
     }
+}
+
+/// Read a skill directly from this project's own working tree, rather than
+/// fetching it from GitHub.
+///
+/// There is no ref to resolve and nothing to cache: the file on disk *is* the
+/// pinned content, and `axur sync --check` catches drift on it exactly the
+/// way it catches drift on a GitHub-sourced skill — by comparing the digest
+/// recorded in `axur.lock`, not by re-resolving a ref.
+pub fn read_local_skill(project_root: &Path, dir: &str) -> Result<ResolvedSkill> {
+    let prefix = dir.trim_matches('/');
+    if prefix.is_empty() {
+        anyhow::bail!("A local skill's path cannot be the project root");
+    }
+    let root = project_root.join(prefix);
+    if !root.is_dir() {
+        return Err(crate::core::error::Error::NotFound(format!(
+            "No directory at '{}' — declared with source = \"local\" but not \
+             found in this project.",
+            prefix
+        ))
+        .into());
+    }
+
+    let mut files = Vec::new();
+    collect_local_files(&root, &root, &mut files)?;
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+
+    let Some(skill_md) = files.iter().find(|f| f.path == "SKILL.md") else {
+        return Err(
+            crate::core::error::Error::NotFound(format!("'{}' has no SKILL.md", prefix)).into(),
+        );
+    };
+    validate_skill_md(&skill_md.bytes, prefix, LOCAL_SOURCE)?;
+
+    Ok(ResolvedSkill {
+        source: LOCAL_SOURCE.to_string(),
+        source_url: format!("local:{}", prefix),
+        path: prefix.to_string(),
+        // No commit to pin to — the working tree is read fresh every sync,
+        // and the lockfile's content digest is what catches drift.
+        resolved: "working-tree".to_string(),
+        files,
+    })
+}
+
+/// Recursively collect every regular file under `dir`, as paths relative to
+/// `root` with forward slashes — matching the shape a GitHub tree listing
+/// already produces, so every downstream step treats the two the same way.
+///
+/// Symlinks are skipped rather than followed: this walks a directory inside
+/// the developer's own project, and a symlink escaping it should not end up
+/// silently swept into a lockfile digest and installed onto every machine
+/// that syncs.
+fn collect_local_files(root: &Path, dir: &Path, out: &mut Vec<FetchedFile>) -> Result<()> {
+    for entry in
+        std::fs::read_dir(dir).with_context(|| format!("Failed to read {}", dir.display()))?
+    {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        if file_type.is_symlink() {
+            continue;
+        }
+
+        let path = entry.path();
+        if file_type.is_dir() {
+            collect_local_files(root, &path, out)?;
+            continue;
+        }
+        if !file_type.is_file() {
+            continue;
+        }
+
+        let bytes =
+            std::fs::read(&path).with_context(|| format!("Failed to read {}", path.display()))?;
+        if bytes.len() as u64 > MAX_FILE_BYTES {
+            anyhow::bail!(
+                "{} is over the {} byte limit",
+                path.display(),
+                MAX_FILE_BYTES
+            );
+        }
+
+        let relative = path
+            .strip_prefix(root)
+            .unwrap_or(&path)
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .join("/");
+
+        out.push(FetchedFile {
+            path: relative,
+            bytes,
+        });
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -494,7 +593,7 @@ struct SkillFrontmatter {
 /// This runs on content fetched from an arbitrary repository, so parsing is
 /// budgeted: an adversarial document cannot expand aliases until the process
 /// runs out of memory.
-fn validate_skill_md(bytes: &[u8], path: &str, slug: &str) -> Result<()> {
+pub(crate) fn validate_skill_md(bytes: &[u8], path: &str, slug: &str) -> Result<()> {
     let text = std::str::from_utf8(bytes)
         .with_context(|| format!("SKILL.md in {} is not valid UTF-8", slug))?;
 
@@ -729,6 +828,65 @@ fn strip_dir_prefix<'a>(entry: &'a str, prefix: &str) -> Option<&'a str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn write(path: &Path, contents: &str) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, contents).unwrap();
+    }
+
+    #[test]
+    fn reads_a_local_skill_from_the_working_tree() {
+        let dir = tempfile::tempdir().unwrap();
+        let skill = dir.path().join(".axur/skills/onboarding");
+        write(
+            &skill.join("SKILL.md"),
+            "---\nname: onboarding\ndescription: How this team works\n---\n\nRead this first.",
+        );
+        write(&skill.join("references/notes.md"), "# Notes\n");
+
+        let resolved = read_local_skill(dir.path(), ".axur/skills/onboarding").unwrap();
+        assert_eq!(resolved.source, "local");
+        assert_eq!(resolved.path, ".axur/skills/onboarding");
+        assert_eq!(resolved.resolved, "working-tree");
+        assert_eq!(resolved.files.len(), 2);
+        assert!(resolved.skill_md().unwrap().bytes.starts_with(b"---"));
+        assert!(resolved
+            .files
+            .iter()
+            .any(|f| f.path == "references/notes.md"));
+    }
+
+    #[test]
+    fn a_missing_local_directory_is_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let err = read_local_skill(dir.path(), "nowhere")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("No directory"), "{}", err);
+    }
+
+    #[test]
+    fn a_local_skill_without_skill_md_is_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        write(&dir.path().join("empty/README.md"), "not a skill");
+        let err = read_local_skill(dir.path(), "empty")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("SKILL.md"), "{}", err);
+    }
+
+    #[test]
+    fn a_local_skill_with_no_description_is_rejected_same_as_a_fetched_one() {
+        let dir = tempfile::tempdir().unwrap();
+        write(
+            &dir.path().join("bare/SKILL.md"),
+            "---\nname: bare\n---\n\nBody.",
+        );
+        let err = read_local_skill(dir.path(), "bare")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("description"), "{}", err);
+    }
 
     #[test]
     fn parses_every_accepted_source_spelling() {

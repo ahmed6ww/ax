@@ -60,6 +60,24 @@ impl Target {
     pub fn all() -> [Target; 2] {
         [Target::Claude, Target::Codex]
     }
+
+    /// Parse a manifest/CLI agent slug. Accepts `claude`, `claude-code`'s
+    /// short spelling too, since both read naturally in `--agents`.
+    pub fn from_slug(slug: &str) -> Option<Target> {
+        match slug {
+            "claude-code" | "claude" => Some(Target::Claude),
+            "codex" => Some(Target::Codex),
+            _ => None,
+        }
+    }
+
+    /// Whether this agent looks installed on the current machine.
+    pub fn is_detected(&self) -> bool {
+        match self {
+            Target::Claude => crate::utils::paths::claude_detected(),
+            Target::Codex => crate::utils::paths::codex_detected(),
+        }
+    }
 }
 
 /// What a target can actually be given.

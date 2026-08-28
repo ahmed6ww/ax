@@ -69,15 +69,13 @@ impl Targets {
     pub fn resolve(&self) -> Result<(Vec<Target>, Scope)> {
         let mut targets = Vec::new();
         for name in &self.agents {
-            let target = match name.as_str() {
-                "claude-code" | "claude" => Target::Claude,
-                "codex" => Target::Codex,
-                other => anyhow::bail!(
+            let target = Target::from_slug(name).ok_or_else(|| {
+                anyhow::anyhow!(
                     "Unknown agent '{}' in {}. Supported: claude-code, codex.",
-                    other,
+                    name,
                     MANIFEST_FILE
-                ),
-            };
+                )
+            })?;
             if !targets.contains(&target) {
                 targets.push(target);
             }
@@ -108,18 +106,26 @@ impl Targets {
 /// [skills]
 /// rust-architect = "ahmed6ww/ax-agents"
 /// nextjs = { source = "vercel-labs/agent-skills", path = "skills/nextjs", rev = "main" }
+///
+/// # Authored by the team, not fetched from anywhere — `path` is a directory
+/// # in this repository, committed alongside axur.toml.
+/// onboarding = { source = "local", path = ".axur/skills/onboarding" }
 /// ```
+pub const LOCAL_SOURCE: &str = "local";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum SkillSpec {
     Shorthand(String),
     Detailed {
-        /// `owner/repo` on GitHub.
+        /// `owner/repo` on GitHub, or the literal `"local"`.
         source: String,
-        /// Directory within the repository holding `SKILL.md`.
+        /// Directory holding `SKILL.md` — within the repository for a GitHub
+        /// source, or within *this* project for `"local"`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         path: Option<String>,
         /// Branch, tag or commit to resolve. Defaults to the default branch.
+        /// Not valid with `source = "local"`, which has nothing to pin.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         rev: Option<String>,
     },
@@ -148,6 +154,41 @@ impl SkillSpec {
             SkillSpec::Detailed { rev, .. } => rev.as_deref(),
         }
     }
+
+    /// Content the team authored directly in this repository, rather than
+    /// fetched from GitHub.
+    pub fn is_local(&self) -> bool {
+        self.source() == LOCAL_SOURCE
+    }
+
+    /// The directory a local entry reads from, enforcing what a GitHub entry
+    /// leaves optional: a local skill has no repository of its own to default
+    /// into, and no ref to pin.
+    pub fn local_dir(&self, name: &str) -> Result<&str> {
+        match self {
+            SkillSpec::Shorthand(_) => anyhow::bail!(
+                "'{}' has source = \"local\" but no `path` — say which directory \
+                 in this project holds it.",
+                name
+            ),
+            SkillSpec::Detailed { path, rev, .. } => {
+                if rev.is_some() {
+                    anyhow::bail!(
+                        "'{}' has source = \"local\": a local skill has no ref to \
+                         pin, so `rev` is not allowed.",
+                        name
+                    );
+                }
+                path.as_deref().map(|p| p.trim_matches('/')).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "'{}' has source = \"local\" but no `path` — say which \
+                         directory in this project holds it.",
+                        name
+                    )
+                })
+            }
+        }
+    }
 }
 
 /// An MCP server declared by the project.
@@ -168,7 +209,6 @@ impl McpSpec {
             command: self.command.clone(),
             args: self.args.clone(),
             env: self.env.clone().into_iter().collect(),
-            setup_url: None,
         }
     }
 }
@@ -225,6 +265,51 @@ impl Manifest {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_local_skill_resolves_its_directory() {
+        let spec = SkillSpec::Detailed {
+            source: "local".to_string(),
+            path: Some("/.axur/skills/onboarding/".to_string()),
+            rev: None,
+        };
+        assert!(spec.is_local());
+        assert_eq!(
+            spec.local_dir("onboarding").unwrap(),
+            ".axur/skills/onboarding"
+        );
+    }
+
+    #[test]
+    fn a_local_skill_with_no_path_is_an_error() {
+        let spec = SkillSpec::Detailed {
+            source: "local".to_string(),
+            path: None,
+            rev: None,
+        };
+        let err = spec.local_dir("onboarding").unwrap_err().to_string();
+        assert!(err.contains("no `path`"), "{}", err);
+    }
+
+    #[test]
+    fn a_local_skill_with_a_rev_is_an_error() {
+        let spec = SkillSpec::Detailed {
+            source: "local".to_string(),
+            path: Some("onboarding".to_string()),
+            rev: Some("main".to_string()),
+        };
+        let err = spec.local_dir("onboarding").unwrap_err().to_string();
+        assert!(err.contains("no ref to"), "{}", err);
+    }
+
+    #[test]
+    fn a_local_shorthand_has_no_path_to_default_to() {
+        // `onboarding = "local"` names a source with no way to say which
+        // directory holds it — the table form is required.
+        let spec = SkillSpec::Shorthand("local".to_string());
+        assert!(spec.is_local());
+        assert!(spec.local_dir("onboarding").is_err());
+    }
 
     const SAMPLE: &str = r#"
 [targets]
