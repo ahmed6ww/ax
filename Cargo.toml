@@ -46,7 +46,7 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-feature
 tokio = { version = "1.0", features = ["full"] }
 
 # Path Utilities
-dirs = "5.0"
+dirs = "6.0"
 
 # Terminal UI
 cliclack = "0.5"
