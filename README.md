@@ -10,7 +10,7 @@ Declare what your project's agent needs in `axur.toml`, commit it alongside `axu
 axur sync
 ```
 
-[![CI](https://github.com/agenzalabs/ax/actions/workflows/ci.yml/badge.svg)](https://github.com/agenzalabs/ax/actions/workflows/ci.yml)
+[![CI](https://github.com/ahmed6ww/ax/actions/workflows/ci.yml/badge.svg)](https://github.com/ahmed6ww/ax/actions/workflows/ci.yml)
 ![Rust](https://img.shields.io/badge/rust-stable-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -177,10 +177,10 @@ backend       = { source = "your-org/your-bundles", path = "backend" }
 
 ```bash
 # macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/agenzalabs/ax/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/ahmed6ww/ax/main/install.sh | sh
 
 # Windows
-irm https://raw.githubusercontent.com/agenzalabs/ax/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/ahmed6ww/ax/main/install.ps1 | iex
 
 # npm
 npm install -g @axur/cli

@@ -1,5 +1,5 @@
 # axur installer for Windows
-#   irm https://raw.githubusercontent.com/agenzalabs/ax/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/ahmed6ww/ax/main/install.ps1 | iex
 #
 # The release workflow has always built a Windows binary, but nothing could
 # install it: install.sh has no Windows branch. This is that path, with the
@@ -8,7 +8,7 @@
 
 $ErrorActionPreference = 'Stop'
 
-$Repo  = 'agenzalabs/ax'
+$Repo  = 'ahmed6ww/ax'
 $Bin   = 'axur'
 $Asset = 'axur-windows-x64.exe'
 

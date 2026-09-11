@@ -1,6 +1,6 @@
 #!/bin/sh
 # axur installer
-#   curl -fsSL https://raw.githubusercontent.com/agenzalabs/ax/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/ahmed6ww/ax/main/install.sh | sh
 #
 # Downloads the release binary for this platform and verifies it against the
 # SHA256SUMS published with the release before installing. An unverifiable
@@ -9,7 +9,7 @@
 
 set -eu
 
-REPO="agenzalabs/ax"
+REPO="ahmed6ww/ax"
 BIN="axur"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; DIM='\033[2m'; NC='\033[0m'
